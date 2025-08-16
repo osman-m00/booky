@@ -22,8 +22,32 @@ const searchBooksFromApi = async (query) => {
     }
 };
 
+
+const getBookById = async (id) =>{
+    try {
+        const response = await axios.get(`https://www.googleapis.com/books/v1/volumes/${id}`);
+
+        const transformedBook = {
+            id: response.data.id,
+            title: response.data.volumeInfo.title,
+            authors: response.data.volumeInfo.authors?.join(', ') || 'Unknown Author',
+            description: response.data.volumeInfo.description || 'No description available',
+            coverImage: response.data.volumeInfo.imageLinks?.thumbnail || null,
+            publishedDate: response.data.volumeInfo.publishedDate,
+            pageCount: response.data.volumeInfo.pageCount,
+            rating: response.data.volumeInfo.averageRating
+        };
+    
+        return transformedBook;
+    } catch (error){
+        throw new Error ('Failed to fetch book with specified ID');
+    }
+    
+};
+
 module.exports = {
-    searchBooksFromApi
+    searchBooksFromApi,
+    getBookById
 }; 
 
 

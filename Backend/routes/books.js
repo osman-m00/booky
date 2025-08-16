@@ -1,9 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const {searchBooks } = require('../controllers/booksController');
-
+const {searchBooks , getBookDetails} = require('../controllers/booksController');
 
 router.get('/search', searchBooks);
-
+router.get('/:id', getBookDetails);
 
 module.exports = router;
