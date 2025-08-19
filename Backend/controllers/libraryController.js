@@ -1,5 +1,5 @@
 const { ensureBookInDb } = require('../services/booksService');
-const { addOrUpdate } = require('../services/libraryService');
+const { addOrUpdate, listWithBooks } = require('../services/libraryService');
 
 const VALID_STATUSES = ['want_to_read', 'currently_reading', 'completed', 'abandoned'];
 
@@ -80,4 +80,40 @@ const addToLibrary = async (req, res) => {
 	}
 };
 
-module.exports = { addToLibrary };
+const listLibrary = async (req, res) =>{
+	const userId = req.userId; // reading user id from the middleware
+	const {status} = req.query;
+	const page = Number(req.query.page) || 1;
+	const limit = Number(req.query.limit) ||10;
+
+
+	if (!Number.isInteger(page) || page < 1) {
+		return res.status(400).json({ error: 'invalid_page', message: 'page must be an integer >= 1' });
+	  }
+	  if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
+		return res.status(400).json({ error: 'invalid_limit', message: 'limit must be 1..50' });
+	  }
+	  if (status && !VALID_STATUSES.includes(status)) {
+		return res.status(400).json({ error: 'invalid_status', message: `status must be one of: ${VALID_STATUSES.join(', ')}` });}
+	
+
+		try {
+			const {items}= await listWithBooks(userId, {status, page, limit});
+			return res.status(200).json({
+				ok:true,
+				page,
+				limit,
+				status: status || null,
+				items
+			});
+		} catch (e){
+			console.error('List library error:', e);
+			return res.status(500).json({
+				error: 'internal server error',
+				message: 'Failed to list library'
+			});
+		}
+
+	  };
+
+module.exports = { addToLibrary, listLibrary };
