@@ -1,5 +1,5 @@
 const { ensureBookInDb } = require('../services/booksService');
-const { addOrUpdate, listWithBooks } = require('../services/libraryService');
+const { addOrUpdate, listWithBooks, update, deleteBook } = require('../services/libraryService');
 
 const VALID_STATUSES = ['want_to_read', 'currently_reading', 'completed', 'abandoned'];
 
@@ -116,4 +116,98 @@ const listLibrary = async (req, res) =>{
 
 	  };
 
-module.exports = { addToLibrary, listLibrary };
+
+const updateLibraryItem = async (req, res) => {
+		const userId = req.userId; 
+		const bookId = req.params.bookId; 
+		const { status, rating, notes } = req.body || {};
+	  
+		if (!bookId || !bookId.trim()) {
+		  return res.status(400).json({
+			error: 'missing_book_id',
+			message: 'Book Id is required'
+		  });
+		}
+	  
+		if (!status && !rating && !notes) {
+		  return res.status(400).json({
+			error: 'missing_fields',
+			message: 'At least one of the fields must be present'
+		  });
+		}
+	  
+		if (status && !VALID_STATUSES.includes(status)) {
+		  return res.status(400).json({
+			error: 'invalid_status',
+			message: `status must be one of: ${VALID_STATUSES.join(', ')}`
+		  });
+		}
+	  
+		if (rating !== undefined) {
+		  const n = Number(rating);
+		  if (!Number.isInteger(n) || n < 1 || n > 5) {
+			return res.status(400).json({
+			  error: 'invalid_rating',
+			  message: 'rating must be an integer between 1 and 5'
+			});
+		  }
+		}
+	  
+		if (notes && typeof notes !== 'string') {
+		  return res.status(400).json({
+			error: 'invalid_notes',
+			message: 'notes must be a string'
+		  });
+		}
+	  
+		if (typeof notes === 'string' && notes.length > 2000) {
+		  return res.status(400).json({
+			error: 'notes_too_long',
+			message: 'notes must be at most 2000 characters'
+		  });
+		}
+	  
+		try {
+		  const updatedItem = await update(userId, bookId, { status, rating, notes });
+		  return res.json(updatedItem);
+		} catch (err) {
+		  if (err.message === 'not found') {
+			return res.status(404).json({
+			  error: 'not_found',
+			  message: 'No matching library item found'
+			});
+		  }
+		  return res.status(500).json({
+			error: 'update_failed',
+			message: err.message
+		  });
+		}
+	  };
+	  
+const removeFromLibrary = async (req, res) =>{
+	const userId = req.userId;
+	const bookId = req.params.bookId
+	if (!bookId || !bookId.trim()) {
+		return res.status(400).json({
+		  error: 'missing_book_id',
+		  message: 'Book Id is required'
+		});
+	  }
+	  try {
+		const deletedItem = await deleteBook(userId, bookId);
+		return  res.status(204).send();
+	  } catch (err) {
+		if (err.message === 'not found') {
+		  return res.status(404).json({
+			error: 'not_found',
+			message: 'No matching library item found'
+		  });
+		}
+		return res.status(500).json({
+		  error: 'delete_failed',
+		  message: err.message
+		});
+	  }
+}
+
+module.exports = { addToLibrary, listLibrary, updateLibraryItem, removeFromLibrary };

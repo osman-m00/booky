@@ -62,4 +62,44 @@ async function listWithBooks(userId, params){
   return {items};
 }
 
-module.exports = { addOrUpdate, listLibrary, listWithBooks };
+async function update(userId, bookId, {status, rating, notes}){
+  const updates = {};
+  if(status !== undefined) updates.status = status;
+  if (rating !== undefined) updates.rating = rating;
+  if (notes !== undefined) updates.notes = notes;
+
+  const {data, error} = await supabase
+  .from('user_library')
+  .update(updates)
+  .eq('user_id', userId)
+  .eq('book_id', bookId)
+  .select('*')
+  .single();
+  
+  if(error){
+    if(error.code == 'PGRST116') throw new Error('not found');
+    throw new Error (`update_failed:${error.message}`);
+  }
+  return data;
+}
+
+async function deleteBook(userId, bookId) {
+  const { data, error } = await supabase
+    .from('user_library')
+    .delete()
+    .eq('user_id', userId)
+    .eq('book_id', bookId);
+
+  if (error) {
+    throw new Error(`Failed to delete library item: ${error.message}`);
+  }
+
+  if (!data || data.length === 0) {
+    // Nothing deleted → item not found
+    throw new Error('not_found');
+  }
+
+  return true; // successfully deleted
+}
+
+module.exports = { addOrUpdate, listLibrary, listWithBooks, update, deleteBook };
