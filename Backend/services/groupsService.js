@@ -248,7 +248,7 @@ async function listGroups({ is_public, topic_tags, limit = 10, offset = 0 }) {
   }
 }
 
-async function joinGroup(is_public, invite_code, groupId, userId) {
+async function joinGroup(invite_code, groupId, userId) {
   try {
     // 1. Check if user is already a participant
     const { data: existing, error: existingError } = await supabase
@@ -262,20 +262,21 @@ async function joinGroup(is_public, invite_code, groupId, userId) {
       throw new Error('User is already a participant in this group');
     }
 
-    // 2. Verify invite_code if group is private
+    // 2. Fetch group info (invite_code + is_public)
     const { data: groupData, error: groupError } = await supabase
       .from('groups')
-      .select('invite_code')
+      .select('invite_code, is_public')
       .eq('id', groupId)
-      .single(); // ensures we get exactly one row
+      .single();
 
     if (groupError) throw new Error('Failed to fetch group info');
 
-    if (is_public === false && groupData.invite_code !== invite_code) {
+    // 3. Check invite code if group is private
+    if (!groupData.is_public && groupData.invite_code !== invite_code) {
       throw new Error('Invalid invite code');
     }
 
-    // 3. Insert user into group_participants with default role 'member'
+    // 4. Insert user into group_participants
     const { data: insertedMember, error: insertError } = await supabase
       .from('group_participants')
       .insert([{ group_id: groupId, user_id: userId, role: 'member' }])
@@ -284,7 +285,6 @@ async function joinGroup(is_public, invite_code, groupId, userId) {
 
     if (insertError) throw new Error('Failed to insert member into group');
 
-    // 4. Return success with assigned role
     return {
       ok: true,
       message: 'Member inserted successfully',
