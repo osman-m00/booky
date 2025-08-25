@@ -171,7 +171,7 @@ async function deleteGroup(userId, groupId) {
   }
 }
 
-async function listGroups({ is_public, topic_tags, limit = 10, offset = 0 }) {
+async function glistGroups({ is_public, topic_tags, limit = 10, offset = 0 }) {
   try {
     let query = supabase
       .from('groups')
@@ -187,7 +187,6 @@ async function listGroups({ is_public, topic_tags, limit = 10, offset = 0 }) {
         user:users(name, avatar_url)
       `);
 
-    // 2️⃣ Apply optional filters
     if (is_public !== undefined) {
       query = query.eq('is_public', is_public);
     }
@@ -197,7 +196,6 @@ async function listGroups({ is_public, topic_tags, limit = 10, offset = 0 }) {
       query = query.overlaps('topic_tags', topic_tags);
     }
 
-    // 3️⃣ Apply pagination
     query = query.range(offset, offset + limit - 1);
 
     // 4️⃣ Execute query
