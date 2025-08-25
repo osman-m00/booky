@@ -6,12 +6,24 @@ import {
   deleteMessage,
   listMessages,
   markMessageAsRead
-} from '../services/messageService.js'; 
+} from '../services/messageService.js';
+
+import { getOrCreateUser } from '../services/usersService.js';
 
 // a. Create Message Controller
 export async function createMessageController(req, res) {
   try {
-    const id = req.params.id; // simulate auth user id
+    const clerkUser = {
+      id: req.user.id,
+      email: req.user.claims.email,
+      firstName: req.user.claims.first_name,
+      lastName: req.user.claims.last_name,
+      avatarUrl: req.user.claims.avatar_url,
+    };
+
+    const internalUser = await getOrCreateUser(clerkUser);
+    const userId = internalUser.id;
+
     const { groupId, content, messageType, replyToId } = req.body;
 
     // Input validation
@@ -24,7 +36,7 @@ export async function createMessageController(req, res) {
       return res.status(400).json({ error: 'Invalid message type' });
     }
 
-    const message = await createMessage(id, groupId, content, messageType, replyToId);
+    const message = await createMessage(userId, groupId, content, messageType, replyToId);
     return res.status(201).json(message);
 
   } catch (err) {
@@ -57,7 +69,16 @@ export async function getMessageController(req, res) {
 // c. Update Message Controller
 export async function updateMessageController(req, res) {
   try {
-    const id = req.params.id;
+    const clerkUser = {
+      id: req.user.id,
+      email: req.user.claims.email,
+      firstName: req.user.claims.first_name,
+      lastName: req.user.claims.last_name,
+      avatarUrl: req.user.claims.avatar_url,
+    };
+    const internalUser = await getOrCreateUser(clerkUser);
+    const userId = internalUser.id;
+
     const { messageId } = req.params;
     const { content } = req.body;
 
@@ -65,7 +86,7 @@ export async function updateMessageController(req, res) {
       return res.status(400).json({ error: 'content must be 1-2000 characters' });
     }
 
-    const updated = await updateMessage(messageId, id, content);
+    const updated = await updateMessage(messageId, userId, content);
     return res.status(200).json(updated);
 
   } catch (err) {
@@ -79,10 +100,19 @@ export async function updateMessageController(req, res) {
 // d. Delete Message Controller
 export async function deleteMessageController(req, res) {
   try {
-    const id = req.params.id;
+    const clerkUser = {
+      id: req.user.id,
+      email: req.user.claims.email,
+      firstName: req.user.claims.first_name,
+      lastName: req.user.claims.last_name,
+      avatarUrl: req.user.claims.avatar_url,
+    };
+    const internalUser = await getOrCreateUser(clerkUser);
+    const userId = internalUser.id;
+
     const { messageId } = req.params;
 
-    await deleteMessage(messageId, id);
+    await deleteMessage(messageId, userId);
     return res.status(204).send();
 
   } catch (err) {
@@ -96,7 +126,16 @@ export async function deleteMessageController(req, res) {
 // e. List Messages Controller
 export async function listMessagesController(req, res) {
   try {
-    const id = req.params.id;
+    const clerkUser = {
+      id: req.user.id,
+      email: req.user.claims.email,
+      firstName: req.user.claims.first_name,
+      lastName: req.user.claims.last_name,
+      avatarUrl: req.user.claims.avatar_url,
+    };
+    const internalUser = await getOrCreateUser(clerkUser);
+    const userId = internalUser.id;
+
     const { groupId } = req.params;
     let { page = 1, limit = 10, replyToId } = req.query;
 
@@ -107,7 +146,7 @@ export async function listMessagesController(req, res) {
     if (isNaN(page) || page < 1) page = 1;
     if (isNaN(limit) || limit < 1 || limit > 100) limit = 10;
 
-    const result = await listMessages(groupId, id, page, limit, replyToId);
+    const result = await listMessages(groupId, userId, page, limit, replyToId);
     return res.status(200).json(result);
 
   } catch (err) {
@@ -124,10 +163,19 @@ export async function listMessagesController(req, res) {
 // f. Mark Message as Read Controller
 export async function markMessageAsReadController(req, res) {
   try {
-    const id = req.params.id;
+    const clerkUser = {
+      id: req.user.id,
+      email: req.user.claims.email,
+      firstName: req.user.claims.first_name,
+      lastName: req.user.claims.last_name,
+      avatarUrl: req.user.claims.avatar_url,
+    };
+    const internalUser = await getOrCreateUser(clerkUser);
+    const userId = internalUser.id;
+
     const { messageId } = req.params;
 
-    await markMessageAsRead(messageId, id);
+    await markMessageAsRead(messageId, userId);
     return res.status(200).json({ ok: true, message: 'Message marked as read' });
 
   } catch (err) {

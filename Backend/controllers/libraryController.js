@@ -1,213 +1,161 @@
 const { ensureBookInDb } = require('../services/booksService');
 const { addOrUpdate, listWithBooks, update, deleteBook } = require('../services/libraryService');
+const { getOrCreateUser } = require('../services/usersService');
 
 const VALID_STATUSES = ['want_to_read', 'currently_reading', 'completed', 'abandoned'];
 
 const addToLibrary = async (req, res) => {
-	const userId = req.userId; // from requireUser middleware
-	const { bookId, status, rating, notes } = req.body || {};
+  try {
+    const clerkUser = {
+      id: req.user.id,
+      email: req.user.claims.email,
+      firstName: req.user.claims.first_name,
+      lastName: req.user.claims.last_name,
+      avatarUrl: req.user.claims.avatar_url,
+    };
+    const internalUser = await getOrCreateUser(clerkUser);
+    const userId = internalUser.id;
 
-	// bookId required
-	if (!bookId || !bookId.trim()) {
-		return res.status(400).json({
-			error: 'missing_book_id',
-			message: 'Book Id is required',
-		});
-	}
+    const { bookId, status, rating, notes } = req.body || {};
 
-	// optional: status
-	if (status && !VALID_STATUSES.includes(status)) {
-		return res.status(400).json({
-			error: 'invalid_status',
-			message: `status must be one of: ${VALID_STATUSES.join(', ')}`,
-		});
-	}
+    if (!bookId || !bookId.trim()) {
+      return res.status(400).json({ error: 'missing_book_id', message: 'Book Id is required' });
+    }
 
-	// optional: rating 1..5 integer
-	if (rating !== undefined) {
-		const n = Number(rating);
-		if (!Number.isInteger(n) || n < 1 || n > 5) {
-			return res.status(400).json({
-				error: 'invalid_rating',
-				message: 'rating must be an integer between 1 and 5',
-			});
-		}
-	}
+    if (status && !VALID_STATUSES.includes(status)) {
+      return res.status(400).json({
+        error: 'invalid_status',
+        message: `status must be one of: ${VALID_STATUSES.join(', ')}`,
+      });
+    }
 
-	// optional: notes length cap
-	if (notes && typeof notes !== 'string') {
-		return res.status(400).json({
-			error: 'invalid_notes',
-			message: 'notes must be a string',
-		});
-	}
-	if (typeof notes === 'string' && notes.length > 2000) {
-		return res.status(400).json({
-			error: 'notes_too_long',
-			message: 'notes must be at most 2000 characters',
-		});
-	}
+    if (rating !== undefined) {
+      const n = Number(rating);
+      if (!Number.isInteger(n) || n < 1 || n > 5) {
+        return res.status(400).json({ error: 'invalid_rating', message: 'Rating must be 1-5 integer' });
+      }
+    }
 
-	try {
-		// Task 4: Ensure book exists in DB
-		await ensureBookInDb(bookId);
+    if (notes && typeof notes !== 'string') {
+      return res.status(400).json({ error: 'invalid_notes', message: 'Notes must be a string' });
+    }
+    if (typeof notes === 'string' && notes.length > 2000) {
+      return res.status(400).json({ error: 'notes_too_long', message: 'Notes must be <= 2000 chars' });
+    }
 
-		// Task 5: Add/Update row in user_library
-		const libItem = await addOrUpdate(userId, { bookId, status, rating, notes });
+    await ensureBookInDb(bookId);
 
-		// Return the created/updated library item
-		return res.status(201).json({
-			ok: true,
-			message: 'Book added to library successfully',
-			item: libItem
-		});
+    const libItem = await addOrUpdate(userId, { bookId, status, rating, notes });
 
-	} catch (error) {
-		console.error('Add to library error:', error);
-		
-		// Handle specific errors
-		if (error.message.includes('Failed to fetch book with specified ID')) {
-			return res.status(404).json({
-				error: 'book_not_found',
-				message: 'The requested book could not be found'
-			});
-		}
-
-		res.status(500).json({
-			error: 'internal_server_error',
-			message: 'Something went wrong on our end'
-		});
-	}
+    return res.status(201).json({
+      ok: true,
+      message: 'Book added to library successfully',
+      item: libItem,
+    });
+  } catch (err) {
+    console.error('Add to library error:', err);
+    if (err.message.includes('Failed to fetch book with specified ID')) {
+      return res.status(404).json({ error: 'book_not_found', message: 'Book not found' });
+    }
+    return res.status(500).json({ error: 'internal_server_error', message: 'Something went wrong' });
+  }
 };
 
-const listLibrary = async (req, res) =>{
-	const userId = req.userId; // reading user id from the middleware
-	const {status} = req.query;
-	const page = Number(req.query.page) || 1;
-	const limit = Number(req.query.limit) ||10;
+const listLibrary = async (req, res) => {
+  try {
+    const clerkUser = {
+      id: req.user.id,
+      email: req.user.claims.email,
+      firstName: req.user.claims.first_name,
+      lastName: req.user.claims.last_name,
+      avatarUrl: req.user.claims.avatar_url,
+    };
+    const internalUser = await getOrCreateUser(clerkUser);
+    const userId = internalUser.id;
 
+    const { status } = req.query;
+    let page = Number(req.query.page) || 1;
+    let limit = Number(req.query.limit) || 10;
 
-	if (!Number.isInteger(page) || page < 1) {
-		return res.status(400).json({ error: 'invalid_page', message: 'page must be an integer >= 1' });
-	  }
-	  if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
-		return res.status(400).json({ error: 'invalid_limit', message: 'limit must be 1..50' });
-	  }
-	  if (status && !VALID_STATUSES.includes(status)) {
-		return res.status(400).json({ error: 'invalid_status', message: `status must be one of: ${VALID_STATUSES.join(', ')}` });}
-	
+    if (!Number.isInteger(page) || page < 1) page = 1;
+    if (!Number.isInteger(limit) || limit < 1 || limit > 50) limit = 10;
+    if (status && !VALID_STATUSES.includes(status)) {
+      return res.status(400).json({ error: 'invalid_status', message: `status must be one of: ${VALID_STATUSES.join(', ')}` });
+    }
 
-		try {
-			const {items}= await listWithBooks(userId, {status, page, limit});
-			return res.status(200).json({
-				ok:true,
-				page,
-				limit,
-				status: status || null,
-				items
-			});
-		} catch (e){
-			console.error('List library error:', e);
-			return res.status(500).json({
-				error: 'internal server error',
-				message: 'Failed to list library'
-			});
-		}
+    const { items } = await listWithBooks(userId, { status, page, limit });
 
-	  };
-
+    return res.status(200).json({ ok: true, page, limit, status: status || null, items });
+  } catch (err) {
+    console.error('List library error:', err);
+    return res.status(500).json({ error: 'internal_server_error', message: 'Failed to list library' });
+  }
+};
 
 const updateLibraryItem = async (req, res) => {
-		const userId = req.userId; 
-		const bookId = req.params.bookId; 
-		const { status, rating, notes } = req.body || {};
-	  
-		if (!bookId || !bookId.trim()) {
-		  return res.status(400).json({
-			error: 'missing_book_id',
-			message: 'Book Id is required'
-		  });
-		}
-	  
-		if (!status && !rating && !notes) {
-		  return res.status(400).json({
-			error: 'missing_fields',
-			message: 'At least one of the fields must be present'
-		  });
-		}
-	  
-		if (status && !VALID_STATUSES.includes(status)) {
-		  return res.status(400).json({
-			error: 'invalid_status',
-			message: `status must be one of: ${VALID_STATUSES.join(', ')}`
-		  });
-		}
-	  
-		if (rating !== undefined) {
-		  const n = Number(rating);
-		  if (!Number.isInteger(n) || n < 1 || n > 5) {
-			return res.status(400).json({
-			  error: 'invalid_rating',
-			  message: 'rating must be an integer between 1 and 5'
-			});
-		  }
-		}
-	  
-		if (notes && typeof notes !== 'string') {
-		  return res.status(400).json({
-			error: 'invalid_notes',
-			message: 'notes must be a string'
-		  });
-		}
-	  
-		if (typeof notes === 'string' && notes.length > 2000) {
-		  return res.status(400).json({
-			error: 'notes_too_long',
-			message: 'notes must be at most 2000 characters'
-		  });
-		}
-	  
-		try {
-		  const updatedItem = await update(userId, bookId, { status, rating, notes });
-		  return res.json(updatedItem);
-		} catch (err) {
-		  if (err.message === 'not found') {
-			return res.status(404).json({
-			  error: 'not_found',
-			  message: 'No matching library item found'
-			});
-		  }
-		  return res.status(500).json({
-			error: 'update_failed',
-			message: err.message
-		  });
-		}
-	  };
-	  
-const removeFromLibrary = async (req, res) =>{
-	const userId = req.userId;
-	const bookId = req.params.bookId
-	if (!bookId || !bookId.trim()) {
-		return res.status(400).json({
-		  error: 'missing_book_id',
-		  message: 'Book Id is required'
-		});
-	  }
-	  try {
-		const deletedItem = await deleteBook(userId, bookId);
-		return  res.status(204).send();
-	  } catch (err) {
-		if (err.message === 'not found') {
-		  return res.status(404).json({
-			error: 'not_found',
-			message: 'No matching library item found'
-		  });
-		}
-		return res.status(500).json({
-		  error: 'delete_failed',
-		  message: err.message
-		});
-	  }
-}
+  try {
+    const clerkUser = {
+      id: req.user.id,
+      email: req.user.claims.email,
+      firstName: req.user.claims.first_name,
+      lastName: req.user.claims.last_name,
+      avatarUrl: req.user.claims.avatar_url,
+    };
+    const internalUser = await getOrCreateUser(clerkUser);
+    const userId = internalUser.id;
+
+    const bookId = req.params.bookId;
+    const { status, rating, notes } = req.body || {};
+
+    if (!bookId || !bookId.trim()) {
+      return res.status(400).json({ error: 'missing_book_id', message: 'Book Id required' });
+    }
+    if (!status && rating === undefined && !notes) {
+      return res.status(400).json({ error: 'missing_fields', message: 'At least one field is required' });
+    }
+    if (status && !VALID_STATUSES.includes(status)) {
+      return res.status(400).json({ error: 'invalid_status', message: `status must be one of: ${VALID_STATUSES.join(', ')}` });
+    }
+    if (rating !== undefined && (!Number.isInteger(Number(rating)) || rating < 1 || rating > 5)) {
+      return res.status(400).json({ error: 'invalid_rating', message: 'Rating must be 1-5 integer' });
+    }
+    if (notes && (typeof notes !== 'string' || notes.length > 2000)) {
+      return res.status(400).json({ error: 'invalid_notes', message: 'Notes must be string <= 2000 chars' });
+    }
+
+    const updatedItem = await update(userId, bookId, { status, rating, notes });
+    return res.json(updatedItem);
+  } catch (err) {
+    console.error('Update library error:', err);
+    if (err.message === 'not found') return res.status(404).json({ error: 'not_found', message: 'Library item not found' });
+    return res.status(500).json({ error: 'update_failed', message: err.message });
+  }
+};
+
+const removeFromLibrary = async (req, res) => {
+  try {
+    const clerkUser = {
+      id: req.user.id,
+      email: req.user.claims.email,
+      firstName: req.user.claims.first_name,
+      lastName: req.user.claims.last_name,
+      avatarUrl: req.user.claims.avatar_url,
+    };
+    const internalUser = await getOrCreateUser(clerkUser);
+    const userId = internalUser.id;
+
+    const bookId = req.params.bookId;
+    if (!bookId || !bookId.trim()) {
+      return res.status(400).json({ error: 'missing_book_id', message: 'Book Id required' });
+    }
+
+    await deleteBook(userId, bookId);
+    return res.status(204).send();
+  } catch (err) {
+    console.error('Remove from library error:', err);
+    if (err.message === 'not found') return res.status(404).json({ error: 'not_found', message: 'Library item not found' });
+    return res.status(500).json({ error: 'delete_failed', message: err.message });
+  }
+};
 
 module.exports = { addToLibrary, listLibrary, updateLibraryItem, removeFromLibrary };

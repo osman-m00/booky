@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const requireUser = require('../middleware/requireUser');
+const { clerkAuth } = require('../middleware/clerkAuth');
 
 const {
   createMessageController,
@@ -11,18 +11,14 @@ const {
   markMessageAsReadController
 } = require('../controllers/messageController');
 
-router.use(requireUser);
+// Protect all routes
+router.use(clerkAuth);
 
 router.post('/', createMessageController);
-
 router.get('/:id', getMessageController);
-
 router.put('/:id', updateMessageController);
-
 router.delete('/:id', deleteMessageController);
-
 router.get('/group/:groupId', listMessagesController);
-
 router.post('/:id/read', markMessageAsReadController);
 
 module.exports = router;

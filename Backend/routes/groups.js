@@ -1,16 +1,24 @@
-const express = require('express')
+const express = require('express');
 const router = express.Router();
-const requireUser = require('../middleware/requireUser');
+const { clerkAuth } = require('../middleware/clerkAuth');
 
-const {createGroupController, getGroupController, updateGroupController, deleteGroupController, listGroupsController, joinGroupController} = require('../controllers/groupsController');
+const {
+  createGroupController,
+  getGroupController,
+  updateGroupController,
+  deleteGroupController,
+  listGroupsController,
+  joinGroupController
+} = require('../controllers/groupsController');
 
-router.use(requireUser);
+// Protect all routes below
+router.use(clerkAuth);
 
 router.post('/', createGroupController);
 router.get('/:id', getGroupController);
 router.put('/:id', updateGroupController);
 router.delete('/:id', deleteGroupController);
-router.get('/',listGroupsController);
+router.get('/', listGroupsController);
 router.post('/:id', joinGroupController);
 
 module.exports = router;

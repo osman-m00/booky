@@ -1,18 +1,14 @@
-const express = require('express')
+const express = require('express');
 const router = express.Router();
-const requireUser = require('../middleware/requireUser');
+const { clerkAuth } = require('../middleware/clerkAuth');
 const { addToLibrary, listLibrary, updateLibraryItem, removeFromLibrary } = require('../controllers/libraryController');
 
-router.use(requireUser);
-
-router.put('/:bookId', updateLibraryItem);
-
-router.delete('/:bookId', removeFromLibrary);
+// Protect all routes
+router.use(clerkAuth);
 
 router.post('/', addToLibrary);
-
 router.get('/', listLibrary);
-
-
+router.put('/:bookId', updateLibraryItem);
+router.delete('/:bookId', removeFromLibrary);
 
 module.exports = router;
