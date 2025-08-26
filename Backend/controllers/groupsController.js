@@ -1,5 +1,7 @@
 const { groupService } = require('../services/groupsService');
 const { getOrCreateUser } = require('../services/usersService');
+const { isUuid } = require('uuid-validator');
+
 
 // Helper: Get internal user from Clerk
 async function getInternalUser(req) {
@@ -175,11 +177,77 @@ const joinGroupController = async (req, res) => {
   }
 };
 
+
+
+const  searchGroupsController = async (req, res) =>{
+  try {
+    // 1️⃣ Fetch Clerk user
+    const clerkUser = {
+      id: req.user.id,
+      email: req.user.claims.email,
+      firstName: req.user.claims.first_name,
+      lastName: req.user.claims.last_name,
+      avatarUrl: req.user.claims.avatar_url,
+    };
+    await getOrCreateUser(clerkUser);
+
+    // 2️⃣ Extract and validate query params
+    const { query, isPublic, topicTags, createdBy, page = '1', limit = '10' } = req.query;
+
+    const parsedPage = Number(page);
+    const parsedLimit = Number(limit);
+    if (isNaN(parsedPage) || parsedPage < 1) return res.status(400).json({ error: 'invalid_page', message: 'Page must be a positive number' });
+    if (isNaN(parsedLimit) || parsedLimit < 1) return res.status(400).json({ error: 'invalid_limit', message: 'Limit must be a positive number' });
+
+    let parsedIsPublic;
+    if (isPublic !== undefined) {
+      if (isPublic !== 'true' && isPublic !== 'false') {
+        return res.status(400).json({ error: 'invalid_isPublic', message: 'isPublic must be true or false' });
+      }
+      parsedIsPublic = isPublic === 'true';
+    }
+
+    let parsedTopicTags;
+    if (topicTags) {
+      parsedTopicTags = typeof topicTags === 'string'
+        ? topicTags.split(',').map(tag => tag.trim())
+        : [];
+    }
+
+    if (createdBy && !isUuid(createdBy)) {
+      return res.status(400).json({ error: 'invalid_createdBy', message: 'createdBy must be a valid UUID' });
+    }
+
+    // 3️⃣ Call service
+    const result = await searchGroups({
+      query,
+      isPublic: parsedIsPublic,
+      topicTags: parsedTopicTags,
+      createdBy,
+      page: parsedPage,
+      limit: parsedLimit,
+    });
+
+    if (!result.ok) {
+      return res.status(500).json({ error: 'server_error', message: result.error });
+    }
+
+    // 4️⃣ Return results
+    return res.status(200).json({ ok: true, groups: result.groups });
+
+  } catch (err) {
+    console.error('search groups error:', err);
+    return res.status(500).json({ error: 'server_error', message: 'Failed to search groups' });
+  }
+}
+
+
 module.exports = {
   createGroupController,
   getGroupController,
   updateGroupController,
   deleteGroupController,
   listGroupsController,
-  joinGroupController
+  joinGroupController,
+  searchGroupsController
 };

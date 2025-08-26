@@ -99,10 +99,11 @@ async function deleteReview(reviewId, userId) {
   return { message: "Review deleted successfully" };
 }
 
-async function listReviews(bookId, page = 1, limit = 10) {
+async function listReviews(bookId, page = 1, limit = 10, filters = {}, sort = 'newest') {
   const offset = (page - 1) * limit;
 
-  const { data: reviews, error, count } = await supabase
+  // Start building the query
+  let query = supabase
     .from("reviews")
     .select(
       `
@@ -116,15 +117,43 @@ async function listReviews(bookId, page = 1, limit = 10) {
         avatar_url
       )
       `,
-      { count: "exact" } // get total count
+      { count: "exact" }
     )
-    .eq("book_id", bookId)
-    .order("created_at", { ascending: false }) // newest first
-    .range(offset, offset + limit - 1);
+    .eq("book_id", bookId);
 
-  if (error) {
-    throw new Error("Error fetching reviews");
+  // Apply optional filters
+  if (filters.userId) {
+    query = query.eq("user_id", filters.userId);
   }
+  if (filters.rating !== undefined) {
+    query = query.eq("rating", filters.rating);
+  }
+
+  // Apply sorting
+  switch (sort) {
+    case 'newest':
+      query = query.order('created_at', { ascending: false });
+      break;
+    case 'oldest':
+      query = query.order('created_at', { ascending: true });
+      break;
+    case 'highest':
+      query = query.order('rating', { ascending: false });
+      break;
+    case 'lowest':
+      query = query.order('rating', { ascending: true });
+      break;
+    default:
+      query = query.order('created_at', { ascending: false });
+  }
+
+  // Apply pagination
+  query = query.range(offset, offset + limit - 1);
+
+  // Execute query
+  const { data: reviews, error, count } = await query;
+
+  if (error) throw new Error('Error fetching reviews');
 
   return {
     reviews,
@@ -137,5 +166,79 @@ async function listReviews(bookId, page = 1, limit = 10) {
   };
 }
 
+async function searchReview(bookId, userId, rating, page = 1, limit = 10) {
+  let query = supabase
+    .from('reviews')
+    .select(`
+      id,
+      rating,
+      content,
+      created_at,
+      users (
+        id,
+        name,
+        avatar_url
+      ),
+      books (
+        id,
+        title,
+        author,
+        description,
+        cover_image_url,
+        genres,
+        isbn,
+        language
+      )
+    `);
 
-module.exports = {createReview, getReviewById, updateReview, deleteReview, listReviews};
+  if (bookId !== undefined) {
+    query = query.eq('book_id', bookId);
+  }
+
+  if (userId !== undefined) {
+    query = query.eq('user_id', userId);
+  }
+
+if (typeof rating === 'number') {
+  query = query.eq('rating', rating); // exact match
+} else if (rating && typeof rating === 'object') {
+  if (rating.min !== undefined) {
+    query = query.gte('rating', rating.min);
+  }
+  if (rating.max !== undefined) {
+    query = query.lte('rating', rating.max);
+  }
+}
+
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
+  query = query.range(from, to);
+
+  try {
+    const { data, error } = await query;
+    if (error) {
+      throw new Error(error.message || 'Query failed for filtering');
+    }
+
+    return {
+      ok: true,
+      reviews: data.map(d=>({
+        id: d.id,
+        rating: d.rating,
+        content: d.content,
+        user: d.users,
+        book:d.books
+
+      }))
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err.message
+    };
+  }
+}
+
+
+
+module.exports = {createReview, getReviewById, updateReview, deleteReview, listReviews, searchReview};

@@ -171,7 +171,7 @@ async function deleteGroup(userId, groupId) {
   }
 }
 
-async function glistGroups({ is_public, topic_tags, limit = 10, offset = 0 }) {
+async function listGroups({ is_public, topic_tags, created_by,limit = 10, offset = 0, sort = 'newest' }) {
   try {
     let query = supabase
       .from('groups')
@@ -184,7 +184,8 @@ async function glistGroups({ is_public, topic_tags, limit = 10, offset = 0 }) {
         member_limit,
         avatar_url,
         created_by,
-        user:users(name, avatar_url)
+        created_at,
+        user:users(id, name, avatar_url)
       `);
 
     if (is_public !== undefined) {
@@ -192,13 +193,24 @@ async function glistGroups({ is_public, topic_tags, limit = 10, offset = 0 }) {
     }
 
     if (topic_tags && topic_tags.length > 0) {
-      // Use overlaps operator to match at least one tag
+      // Matches if any tag overlaps
       query = query.overlaps('topic_tags', topic_tags);
+    }
+
+    if (created_by) {
+      query = query.eq('created_by', created_by);
+    }
+
+    if (sort === 'newest') {
+      query = query.order('created_at', { ascending: false });
+    } else if (sort === 'oldest') {
+      query = query.order('created_at', { ascending: true });
+    } else if (sort === 'most_popular') {
+    
     }
 
     query = query.range(offset, offset + limit - 1);
 
-    // 4️⃣ Execute query
     const { data: groups, error } = await query;
     if (error) throw new Error('Failed to fetch groups');
 
@@ -206,7 +218,6 @@ async function glistGroups({ is_public, topic_tags, limit = 10, offset = 0 }) {
       return { groups: [], total: 0, limit, offset };
     }
 
-    // 5️⃣ Fetch participant counts for all groups
     const groupIds = groups.map(g => g.id);
     const { data: countsData, error: countError } = await supabase
       .from('group_participants')
@@ -215,19 +226,23 @@ async function glistGroups({ is_public, topic_tags, limit = 10, offset = 0 }) {
 
     if (countError) throw new Error('Failed to fetch participant counts');
 
-    // Count participants per group
     const countsMap = {};
     countsData.forEach(p => {
       countsMap[p.group_id] = (countsMap[p.group_id] || 0) + 1;
     });
 
-    // 6️⃣ Attach counts to groups
-    const groupsWithCounts = groups.map(g => ({
+    // Attach participant counts
+    let groupsWithCounts = groups.map(g => ({
       ...g,
       participant_count: countsMap[g.id] || 0
     }));
 
-    // 7️⃣ Fetch total count of groups for pagination info
+    if (sort === 'most_popular') {
+      groupsWithCounts = groupsWithCounts.sort(
+        (a, b) => b.participant_count - a.participant_count
+      );
+    }
+
     const { count: total, error: totalError } = await supabase
       .from('groups')
       .select('*', { count: 'exact', head: true });
@@ -296,4 +311,48 @@ async function joinGroup(invite_code, groupId, userId) {
 }
 
 
-module.exports = {createGroup, getGroup, updateGroup, deleteGroup, listGroups, joinGroup};
+async function searchGroups({ query, isPublic, topicTags, createdBy, page = 1, limit = 10 }) {
+  try {
+    let supabaseQuery = supabase
+      .from('groups')
+      .select('*');
+
+    // Text search on name or description
+    if (query) {
+      supabaseQuery = supabaseQuery.or(
+        `name.ilike.%${query}%,description.ilike.%${query}%`
+      );
+    }
+
+    // Filter by public status
+    if (typeof isPublic === 'boolean') {
+      supabaseQuery = supabaseQuery.eq('is_public', isPublic);
+    }
+
+    // Filter by topic tags (array overlap)
+    if (Array.isArray(topicTags) && topicTags.length > 0) {
+      supabaseQuery = supabaseQuery.overlaps('topic_tags', topicTags);
+    }
+
+    // Filter by createdBy UUID
+    if (createdBy) {
+      supabaseQuery = supabaseQuery.eq('created_by', createdBy);
+    }
+
+    // Pagination
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+    supabaseQuery = supabaseQuery.range(from, to);
+
+    const { data, error } = await supabaseQuery;
+    if (error) throw error;
+
+    return { ok: true, groups: data };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+
+
+module.exports = {createGroup, getGroup, updateGroup, deleteGroup, listGroups, joinGroup, searchGroups};

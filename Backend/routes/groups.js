@@ -8,7 +8,8 @@ const {
   updateGroupController,
   deleteGroupController,
   listGroupsController,
-  joinGroupController
+  joinGroupController,
+  searchGroupsController
 } = require('../controllers/groupsController');
 
 // Protect all routes below
@@ -20,5 +21,6 @@ router.put('/:id', updateGroupController);
 router.delete('/:id', deleteGroupController);
 router.get('/', listGroupsController);
 router.post('/:id', joinGroupController);
+router.get('/search', searchGroupsController);
 
 module.exports = router;

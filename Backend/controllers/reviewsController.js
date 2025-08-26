@@ -163,10 +163,70 @@ async function updateReview(req, res) {
   }
 }
 
+async function searchReviews(req, res) {
+  try {
+    const clerkUser = {
+      id: req.user.id,
+      email: req.user.claims.email,
+      firstName: req.user.claims.first_name,
+      lastName: req.user.claims.last_name,
+      avatarUrl: req.user.claims.avatar_url,
+    };
+    const internalUser = await getOrCreateUser(clerkUser);
+    const userId = internalUser.id;
+
+    // Extract filter params from query string
+    const { bookId, rating, page = 1, limit = 10 } = req.query;
+
+    // Parse numbers
+    const parsedBookId = bookId ? String(bookId) : undefined;
+    const parsedPage = Number(page) || 1;
+    const parsedLimit = Number(limit) || 10;
+
+    // Validate inputs
+    if (parsedBookId !== undefined && isNaN(parsedBookId)) {
+      return res.status(400).json({ error: 'invalid_bookId', message: 'Book ID must be a number' });
+    }
+
+    let parsedRating;
+    if (rating !== undefined) {
+      try {
+        parsedRating = JSON.parse(rating); // support range { min, max }
+      } catch {
+        parsedRating = Number(rating);
+      }
+
+      if (typeof parsedRating === 'number' && (parsedRating < 1 || parsedRating > 5)) {
+        return res.status(400).json({ error: 'invalid_rating', message: 'Rating must be 1-5' });
+      }
+
+      if (typeof parsedRating === 'object') {
+        if ((parsedRating.min !== undefined && (parsedRating.min < 1 || parsedRating.min > 5)) ||
+            (parsedRating.max !== undefined && (parsedRating.max < 1 || parsedRating.max > 5))) {
+          return res.status(400).json({ error: 'invalid_rating_range', message: 'Rating range must be 1-5' });
+        }
+      }
+    }
+
+    // Call service
+    const result = await reviewsService.searchReview(parsedBookId, userId, parsedRating, parsedPage, parsedLimit);
+
+    if (!result.ok) {
+      return res.status(500).json({ error: 'server_error', message: result.error });
+    }
+
+    return res.status(200).json({ ok: true, reviews: result.reviews });
+  } catch (err) {
+    console.error('search reviews error:', err);
+    return res.status(500).json({ error: 'server_error', message: 'Failed to search reviews' });
+  }
+}
+
 module.exports = {
   createReview,
   getReview,
   deleteReview,
   listReviews,
   updateReview,
+  searchReviews
 };
