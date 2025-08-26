@@ -1,8 +1,10 @@
-const { validate: isUuid } = require('uuid');
-const reviewsService = require('../services/reviewsService');
-const { getOrCreateUser } = require('../services/usersService');
+// controllers/reviewsController.js
+import { validate as isUuid } from 'uuid';
+import * as reviewsService from '../services/reviewsService.js';
+import { getOrCreateUser } from '../services/usersService.js';
+import { realTimeService } from '../services/realtimeService.js';
 
-async function createReview(req, res) {
+export async function createReview(req, res) {
   try {
     const clerkUser = {
       id: req.user.id,
@@ -17,30 +19,27 @@ async function createReview(req, res) {
     const { bookId, rating, content } = req.body || {};
 
     if (!bookId || !bookId.trim()) {
-      return res.status(400).json({
-        error: 'missing_book_id',
-        message: 'book id is required',
-      });
+      return res.status(400).json({ error: 'missing_book_id', message: 'book id is required' });
     }
 
     if (rating !== undefined) {
       const n = Number(rating);
       if (!Number.isInteger(n) || n < 1 || n > 5) {
-        return res.status(400).json({
-          error: 'invalid_rating',
-          message: 'rating must be an integer between 1 and 5',
-        });
+        return res.status(400).json({ error: 'invalid_rating', message: 'rating must be an integer between 1 and 5' });
       }
     }
 
     if (content && typeof content !== 'string') {
-      return res.status(400).json({
-        error: 'content_not_string',
-        message: 'content must be a string',
-      });
+      return res.status(400).json({ error: 'content_not_string', message: 'content must be a string' });
     }
 
     const reviewItem = await reviewsService.createReview(userId, bookId, rating, content);
+
+    // Broadcast real-time insert
+    realTimeService.broadcastReview(bookId, {
+      event: 'INSERT',
+      review: reviewItem
+    });
 
     return res.status(201).json({
       ok: true,
@@ -49,20 +48,15 @@ async function createReview(req, res) {
     });
   } catch (error) {
     console.error('Create review error:', error);
-    return res.status(500).json({
-      error: 'server_error',
-      message: 'An error occurred while creating the review',
-    });
+    return res.status(500).json({ error: 'server_error', message: 'An error occurred while creating the review' });
   }
 }
 
-async function getReview(req, res) {
-  const id = req.params.id;
-
-  if (!id) return res.status(400).json({ error: 'missing_id', message: 'Review ID required' });
-  if (!isUuid(id)) return res.status(400).json({ error: 'invalid_id', message: 'Review ID must be a valid UUID' });
-
+export async function getReview(req, res) {
   try {
+    const id = req.params.id;
+    if (!id || !isUuid(id)) return res.status(400).json({ error: 'invalid_id', message: 'Review ID must be a valid UUID' });
+
     const review = await reviewsService.getReviewById(id);
     if (!review) return res.status(404).json({ error: 'review_not_found', message: `No review with id ${id}` });
 
@@ -73,7 +67,7 @@ async function getReview(req, res) {
   }
 }
 
-async function deleteReview(req, res) {
+export async function deleteReview(req, res) {
   try {
     const clerkUser = {
       id: req.user.id,
@@ -86,11 +80,21 @@ async function deleteReview(req, res) {
     const userId = internalUser.id;
 
     const id = req.params.id;
-    if (!id) return res.status(400).json({ error: 'missing_id', message: 'Review ID required' });
-    if (!isUuid(id)) return res.status(400).json({ error: 'invalid_id', message: 'Review ID must be UUID' });
+    if (!id || !isUuid(id)) return res.status(400).json({ error: 'invalid_id', message: 'Review ID must be UUID' });
+
+    // Fetch review to get bookId before deletion
+    const review = await reviewsService.getReviewById(id);
+    if (!review) return res.status(404).json({ error: 'not_found', message: 'Review not found' });
+    const bookId = review.book_id;
 
     const result = await reviewsService.deleteReview(id, userId);
-    if (result === 'not_found') return res.status(404).json({ error: 'not_found', message: 'Review not found' });
+
+    // Broadcast deletion
+    realTimeService.broadcastReview(bookId, {
+      event: 'DELETE',
+      reviewId: id
+    });
+
     if (result === 'forbidden') return res.status(403).json({ error: 'forbidden', message: 'No permission' });
 
     return res.status(204).send();
@@ -100,14 +104,60 @@ async function deleteReview(req, res) {
   }
 }
 
-async function listReviews(req, res) {
+export async function updateReview(req, res) {
   try {
-    const { bookId } = req.params || req.query;
+    const clerkUser = {
+      id: req.user.id,
+      email: req.user.claims.email,
+      firstName: req.user.claims.first_name,
+      lastName: req.user.claims.last_name,
+      avatarUrl: req.user.claims.avatar_url,
+    };
+    const internalUser = await getOrCreateUser(clerkUser);
+    const userId = internalUser.id;
+
+    const reviewId = req.params.id;
+    const { rating, content } = req.body || {};
+
+    if (!reviewId || !isUuid(reviewId)) return res.status(400).json({ error: 'invalid_id', message: 'Review ID must be UUID' });
+
+    if (rating !== undefined && (!Number.isInteger(Number(rating)) || rating < 1 || rating > 5)) {
+      return res.status(400).json({ error: 'invalid_rating', message: 'Rating must be 1-5 integer' });
+    }
+
+    if (content !== undefined && (typeof content !== 'string' || content.length > 1000)) {
+      return res.status(400).json({ error: 'invalid_content', message: 'Content must be string <= 1000 chars' });
+    }
+
+    // Fetch review to get bookId before update
+    const review = await reviewsService.getReviewById(reviewId);
+    if (!review) return res.status(404).json({ error: 'review_not_found', message: 'Review not found' });
+    const bookId = review.book_id;
+
+    const updatedReview = await reviewsService.updateReview(reviewId, userId, { rating, content });
+
+    // Broadcast update
+    realTimeService.broadcastReview(bookId, {
+      event: 'UPDATE',
+      review: updatedReview
+    });
+
+    if (updatedReview === 'forbidden') return res.status(403).json({ error: 'forbidden', message: 'No permission' });
+
+    return res.status(200).json({ ok: true, message: 'Review updated successfully', review: updatedReview });
+  } catch (err) {
+    console.error('Update review error:', err);
+    return res.status(500).json({ error: 'server_error', message: 'Failed to update review' });
+  }
+}
+
+export async function listReviews(req, res) {
+  try {
+    const { bookId } = req.query;
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 10;
 
-    if (!bookId) return res.status(400).json({ error: 'missing_book_id', message: 'bookId required' });
-    if (!isUuid(bookId)) return res.status(400).json({ error: 'invalid_book_id', message: 'bookId must be UUID' });
+    if (!bookId || !isUuid(bookId)) return res.status(400).json({ error: 'invalid_book_id', message: 'bookId must be UUID' });
 
     const { reviews, total } = await reviewsService.listReviews(bookId, page, limit);
 
@@ -125,7 +175,7 @@ async function listReviews(req, res) {
   }
 }
 
-async function updateReview(req, res) {
+export async function searchReviews(req, res) {
   try {
     const clerkUser = {
       id: req.user.id,
@@ -137,83 +187,20 @@ async function updateReview(req, res) {
     const internalUser = await getOrCreateUser(clerkUser);
     const userId = internalUser.id;
 
-    const reviewId = req.params.id;
-    const { rating, content } = req.body || {};
-
-    if (!reviewId) return res.status(400).json({ error: 'missing_id', message: 'Review ID required' });
-    if (!isUuid(reviewId)) return res.status(400).json({ error: 'invalid_id', message: 'Review ID must be UUID' });
-
-    if (rating !== undefined && (!Number.isInteger(Number(rating)) || rating < 1 || rating > 5)) {
-      return res.status(400).json({ error: 'invalid_rating', message: 'Rating must be 1-5 integer' });
-    }
-
-    if (content !== undefined && (typeof content !== 'string' || content.length > 1000)) {
-      return res.status(400).json({ error: 'invalid_content', message: 'Content must be string <= 1000 chars' });
-    }
-
-    const updatedReview = await reviewsService.updateReview(reviewId, userId, { rating, content });
-
-    if (updatedReview === 'not_found') return res.status(404).json({ error: 'review_not_found', message: 'Review not found' });
-    if (updatedReview === 'forbidden') return res.status(403).json({ error: 'forbidden', message: 'No permission' });
-
-    return res.status(200).json({ ok: true, message: 'Review updated successfully', review: updatedReview });
-  } catch (err) {
-    console.error('Update review error:', err);
-    return res.status(500).json({ error: 'server_error', message: 'Failed to update review' });
-  }
-}
-
-async function searchReviews(req, res) {
-  try {
-    const clerkUser = {
-      id: req.user.id,
-      email: req.user.claims.email,
-      firstName: req.user.claims.first_name,
-      lastName: req.user.claims.last_name,
-      avatarUrl: req.user.claims.avatar_url,
-    };
-    const internalUser = await getOrCreateUser(clerkUser);
-    const userId = internalUser.id;
-
-    // Extract filter params from query string
     const { bookId, rating, page = 1, limit = 10 } = req.query;
-
-    // Parse numbers
-    const parsedBookId = bookId ? String(bookId) : undefined;
-    const parsedPage = Number(page) || 1;
-    const parsedLimit = Number(limit) || 10;
-
-    // Validate inputs
-    if (parsedBookId !== undefined && isNaN(parsedBookId)) {
-      return res.status(400).json({ error: 'invalid_bookId', message: 'Book ID must be a number' });
-    }
 
     let parsedRating;
     if (rating !== undefined) {
       try {
-        parsedRating = JSON.parse(rating); // support range { min, max }
+        parsedRating = JSON.parse(rating);
       } catch {
         parsedRating = Number(rating);
       }
-
-      if (typeof parsedRating === 'number' && (parsedRating < 1 || parsedRating > 5)) {
-        return res.status(400).json({ error: 'invalid_rating', message: 'Rating must be 1-5' });
-      }
-
-      if (typeof parsedRating === 'object') {
-        if ((parsedRating.min !== undefined && (parsedRating.min < 1 || parsedRating.min > 5)) ||
-            (parsedRating.max !== undefined && (parsedRating.max < 1 || parsedRating.max > 5))) {
-          return res.status(400).json({ error: 'invalid_rating_range', message: 'Rating range must be 1-5' });
-        }
-      }
     }
 
-    // Call service
-    const result = await reviewsService.searchReview(parsedBookId, userId, parsedRating, parsedPage, parsedLimit);
+    const result = await reviewsService.searchReview(bookId, userId, parsedRating, Number(page), Number(limit));
 
-    if (!result.ok) {
-      return res.status(500).json({ error: 'server_error', message: result.error });
-    }
+    if (!result.ok) return res.status(500).json({ error: 'server_error', message: result.error });
 
     return res.status(200).json({ ok: true, reviews: result.reviews });
   } catch (err) {
@@ -221,12 +208,3 @@ async function searchReviews(req, res) {
     return res.status(500).json({ error: 'server_error', message: 'Failed to search reviews' });
   }
 }
-
-module.exports = {
-  createReview,
-  getReview,
-  deleteReview,
-  listReviews,
-  updateReview,
-  searchReviews
-};

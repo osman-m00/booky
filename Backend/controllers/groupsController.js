@@ -1,7 +1,8 @@
-const { groupService } = require('../services/groupsService');
-const { getOrCreateUser } = require('../services/usersService');
-const { isUuid } = require('uuid-validator');
-
+// controllers/groupsController.js
+import { groupService } from '../services/groupsService.js';
+import { getOrCreateUser } from '../services/usersService.js';
+import { isUuid } from 'uuid-validator';
+import { realTimeService } from '../services/realtimeService.js';
 
 // Helper: Get internal user from Clerk
 async function getInternalUser(req) {
@@ -15,7 +16,8 @@ async function getInternalUser(req) {
   return await getOrCreateUser(clerkUser);
 }
 
-const createGroupController = async (req, res) => {
+// Create Group
+export const createGroupController = async (req, res) => {
   try {
     const internalUser = await getInternalUser(req);
     const userId = internalUser.id;
@@ -51,6 +53,9 @@ const createGroupController = async (req, res) => {
       avatar_url
     );
 
+    // Broadcast creation
+    realTimeService.broadcastGroup(group.id, { event: 'INSERT', group });
+
     return res.status(201).json(group);
   } catch (err) {
     console.error('Create Group Error:', err);
@@ -58,7 +63,8 @@ const createGroupController = async (req, res) => {
   }
 };
 
-const getGroupController = async (req, res) => {
+// Get Group
+export const getGroupController = async (req, res) => {
   const groupId = req.params.groupId;
   try {
     const group = await groupService.getGroup(groupId);
@@ -70,28 +76,13 @@ const getGroupController = async (req, res) => {
   }
 };
 
-const updateGroupController = async (req, res) => {
+// Update Group
+export const updateGroupController = async (req, res) => {
   try {
     const internalUser = await getInternalUser(req);
     const userId = internalUser.id;
     const groupId = req.params.groupId;
     const { name, description, is_public, topic_tags, member_limit, avatar_url } = req.body;
-
-    // Validate inputs
-    if (!name || typeof name !== 'string' || name.length < 1 || name.length > 100) {
-      return res.status(400).json({ error: 'Invalid group name' });
-    }
-    if (description && description.length > 1000) return res.status(400).json({ error: 'Description too long' });
-    if (typeof is_public !== 'boolean') return res.status(400).json({ error: 'is_public must be boolean' });
-    if (topic_tags && (!Array.isArray(topic_tags) || topic_tags.length > 5 || !topic_tags.every(tag => typeof tag === 'string'))) {
-      return res.status(400).json({ error: 'Invalid topic_tags' });
-    }
-    if (member_limit !== undefined && (typeof member_limit !== 'number' || member_limit < 1 || member_limit > 1000)) {
-      return res.status(400).json({ error: 'Invalid member_limit' });
-    }
-    if (avatar_url !== undefined && (typeof avatar_url !== 'string' || avatar_url.length > 500)) {
-      return res.status(400).json({ error: 'Invalid avatar_url' });
-    }
 
     const updatedGroup = await groupService.updateGroup(
       groupId,
@@ -105,6 +96,10 @@ const updateGroupController = async (req, res) => {
     );
 
     if (!updatedGroup) return res.status(404).json({ ok: false, message: 'Group not found' });
+
+    // Broadcast update
+    realTimeService.broadcastGroup(groupId, { event: 'UPDATE', group: updatedGroup });
+
     return res.status(200).json(updatedGroup);
   } catch (err) {
     console.error('Update Group Error:', err);
@@ -112,7 +107,8 @@ const updateGroupController = async (req, res) => {
   }
 };
 
-const deleteGroupController = async (req, res) => {
+// Delete Group
+export const deleteGroupController = async (req, res) => {
   try {
     const internalUser = await getInternalUser(req);
     const userId = internalUser.id;
@@ -120,6 +116,10 @@ const deleteGroupController = async (req, res) => {
 
     const deleted = await groupService.deleteGroup(userId, groupId);
     if (!deleted) return res.status(400).json({ ok: false, message: 'Failed to delete group' });
+
+    // Broadcast deletion
+    realTimeService.broadcastGroup(groupId, { event: 'DELETE', groupId });
+
     return res.status(204).send();
   } catch (err) {
     console.error('Delete Group Error:', err);
@@ -127,9 +127,10 @@ const deleteGroupController = async (req, res) => {
   }
 };
 
-const listGroupsController = async (req, res) => {
+// List Groups
+export const listGroupsController = async (req, res) => {
   try {
-    await getInternalUser(req); // Only to ensure authentication
+    await getInternalUser(req); // Ensure authentication
 
     const { page = 1, limit = 10, is_public, topic_tags } = req.query;
     const pageNum = parseInt(page);
@@ -161,7 +162,8 @@ const listGroupsController = async (req, res) => {
   }
 };
 
-const joinGroupController = async (req, res) => {
+// Join Group
+export const joinGroupController = async (req, res) => {
   try {
     const internalUser = await getInternalUser(req);
     const userId = internalUser.id;
@@ -170,6 +172,13 @@ const joinGroupController = async (req, res) => {
 
     const result = await groupService.joinGroup(invite_code, groupId, userId);
     if (!result.ok) return res.status(400).json(result);
+
+    // Broadcast join
+    realTimeService.broadcastGroup(groupId, {
+      event: 'JOIN',
+      user: { id: userId, name: internalUser.name, avatarUrl: internalUser.avatarUrl }
+    });
+
     return res.status(200).json(result);
   } catch (err) {
     console.error('Join Group Error:', err);
@@ -177,11 +186,9 @@ const joinGroupController = async (req, res) => {
   }
 };
 
-
-
-const  searchGroupsController = async (req, res) =>{
+// Search Groups (with filters)
+export const searchGroupsController = async (req, res) => {
   try {
-    // 1️⃣ Fetch Clerk user
     const clerkUser = {
       id: req.user.id,
       email: req.user.claims.email,
@@ -191,9 +198,7 @@ const  searchGroupsController = async (req, res) =>{
     };
     await getOrCreateUser(clerkUser);
 
-    // 2️⃣ Extract and validate query params
     const { query, isPublic, topicTags, createdBy, page = '1', limit = '10' } = req.query;
-
     const parsedPage = Number(page);
     const parsedLimit = Number(limit);
     if (isNaN(parsedPage) || parsedPage < 1) return res.status(400).json({ error: 'invalid_page', message: 'Page must be a positive number' });
@@ -218,8 +223,7 @@ const  searchGroupsController = async (req, res) =>{
       return res.status(400).json({ error: 'invalid_createdBy', message: 'createdBy must be a valid UUID' });
     }
 
-    // 3️⃣ Call service
-    const result = await searchGroups({
+    const result = await groupService.searchGroups({
       query,
       isPublic: parsedIsPublic,
       topicTags: parsedTopicTags,
@@ -232,22 +236,9 @@ const  searchGroupsController = async (req, res) =>{
       return res.status(500).json({ error: 'server_error', message: result.error });
     }
 
-    // 4️⃣ Return results
     return res.status(200).json({ ok: true, groups: result.groups });
-
   } catch (err) {
     console.error('search groups error:', err);
     return res.status(500).json({ error: 'server_error', message: 'Failed to search groups' });
   }
-}
-
-
-module.exports = {
-  createGroupController,
-  getGroupController,
-  updateGroupController,
-  deleteGroupController,
-  listGroupsController,
-  joinGroupController,
-  searchGroupsController
 };

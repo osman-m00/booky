@@ -7,6 +7,8 @@ import {
   listMessages,
   markMessageAsRead
 } from '../services/messageService.js';
+import { realTimeService } from '../services/realtimeService.js';
+
 
 import { getOrCreateUser } from '../services/usersService.js';
 
@@ -37,6 +39,10 @@ export async function createMessageController(req, res) {
     }
 
     const message = await createMessage(userId, groupId, content, messageType, replyToId);
+    realTimeService.broadcastMessage(groupId, {
+      event: 'INSERT',
+      message,
+      });
     return res.status(201).json(message);
 
   } catch (err) {
@@ -87,6 +93,10 @@ export async function updateMessageController(req, res) {
     }
 
     const updated = await updateMessage(messageId, userId, content);
+    realTimeService.broadcastMessage(updated.group_id, {
+    event: 'UPDATE',
+    message: updated,
+});
     return res.status(200).json(updated);
 
   } catch (err) {
@@ -100,28 +110,30 @@ export async function updateMessageController(req, res) {
 // d. Delete Message Controller
 export async function deleteMessageController(req, res) {
   try {
-    const clerkUser = {
-      id: req.user.id,
-      email: req.user.claims.email,
-      firstName: req.user.claims.first_name,
-      lastName: req.user.claims.last_name,
-      avatarUrl: req.user.claims.avatar_url,
-    };
-    const internalUser = await getOrCreateUser(clerkUser);
-    const userId = internalUser.id;
-
+    const userId = req.user.id;
     const { messageId } = req.params;
 
+    const message = await getMessage(messageId);
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    const groupId = message.group_id; // save groupId for broadcasting
+
     await deleteMessage(messageId, userId);
+
+    realTimeService.broadcastMessage(groupId, {
+      event: 'DELETE',
+      messageId
+    });
+
     return res.status(204).send();
 
   } catch (err) {
-    if (err.message.includes('User is not the sender')) {
-      return res.status(403).json({ error: err.message });
-    }
-    return res.status(500).json({ error: 'Server error' });
+    return res.status(500).json({ error: 'Server error', details: err.message });
   }
 }
+
 
 // e. List Messages Controller
 export async function listMessagesController(req, res) {
