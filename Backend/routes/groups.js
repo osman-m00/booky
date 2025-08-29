@@ -12,7 +12,6 @@ const {
   searchGroupsController
 } = require('../controllers/groupsController');
 
-// Protect all routes below
 router.use(clerkAuth);
 
 router.post('/', createGroupController);
@@ -22,5 +21,16 @@ router.delete('/:id', deleteGroupController);
 router.get('/', listGroupsController);
 router.post('/:id', joinGroupController);
 router.get('/search', searchGroupsController);
+
+// Infinite scroll routes
+router.get('/search/next', (req, res) => {
+  req.query.direction = 'next';
+  searchGroupsController(req, res);
+});
+
+router.get('/search/prev', (req, res) => {
+  req.query.direction = 'prev';
+  searchGroupsController(req, res);
+});
 
 module.exports = router;

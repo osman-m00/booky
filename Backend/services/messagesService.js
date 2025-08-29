@@ -1,4 +1,5 @@
 const {supabase} = require('../config/supabase');
+const { encodeCursor, decodeCursor } = require('../utils/cursor');
 
 async function createMessage(userId, groupId, content, messageType, replyToId = null) {
   try {
@@ -150,9 +151,12 @@ async function deleteMessage(messageId, userId){
     }
 }
 
-async function listMessages(groupId, userId, page = 1, limit = 20, replyToId = null) {
+async function listMessages({ groupId, userId, limit = 20, cursor = null, direction = 'next', replyToId = null }) {
   try {
-    // Check if user is in the group
+    if (direction !== 'next' && direction !== 'prev') {
+      throw new Error("Invalid direction; must be 'next' or 'prev'");
+    }
+
     const { data: existing, error: existingError } = await supabase
       .from('group_participants')
       .select('id')
@@ -160,47 +164,46 @@ async function listMessages(groupId, userId, page = 1, limit = 20, replyToId = n
       .eq('user_id', userId);
 
     if (existingError) throw new Error('Failed to check participants');
-    if (!existing || existing.length === 0) {
-      throw new Error('User is not a participant in this group');
-    }
+    if (!existing || existing.length === 0) throw new Error('User is not a participant in this group');
 
-    // Pagination math
-    const start = (page - 1) * limit;
-    const end = start + limit - 1;
-
-    // Build query with count
     let query = supabase
       .from('messages')
-      .select(`
-        *,
-        sender:users(id, name, avatar_url)
-      `, { count: 'exact' }) // <-- tells Supabase to return row count
+      .select(`*, sender:users(id, name, avatar_url)`, { count: 'exact' })
       .eq('group_id', groupId)
-      .order('created_at', { ascending: true })
-      .range(start, end);
+      .order('created_at', { ascending: direction === 'prev' }) // older first for next, newer first for prev
+      .limit(limit);
 
-    if (replyToId) {
-      query = query.eq('reply_to_id', replyToId);
+    if (replyToId) query = query.eq('reply_to_id', replyToId);
+
+    let cursorValue = cursor ? decodeCursor(cursor) : null;
+    if (cursorValue) {
+      query = direction === 'next'
+        ? query.lt('created_at', cursorValue) // older messages
+        : query.gt('created_at', cursorValue); // newer messages
     }
 
-    const { data: messages, error: messagesError, count } = await query;
+    const { data: messages, error, count } = await query;
+    if (error) throw new Error('Failed to fetch messages');
 
-    if (messagesError) throw new Error('Failed to fetch messages');
+    const nextCursor = messages.length ? encodeCursor(messages[messages.length - 1].created_at) : null;
+    const prevCursor = messages.length ? encodeCursor(messages[0].created_at) : null;
 
     return {
       messages,
       pagination: {
-        page,
+        total: count,
         limit,
-        total: count,                        // total number of matching rows
-        totalPages: Math.ceil(count / limit) // total pages available
+        direction,
+        nextCursor,
+        prevCursor,
       }
     };
-  } catch (error) {
-    console.error('Error listing messages:', error.message);
-    throw error;
+  } catch (err) {
+    console.error('Error listing messages:', err.message);
+    throw err;
   }
 }
+
 
 async function markMessageAsRead(messageId, userId) {
   try {

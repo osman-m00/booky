@@ -132,16 +132,16 @@ export const listGroupsController = async (req, res) => {
   try {
     await getInternalUser(req); // Ensure authentication
 
-    const { page = 1, limit = 10, is_public, topic_tags } = req.query;
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
+    const { page = '1', limit = '10', cursor, direction = 'next', is_public, topic_tags, created_by } = req.query;
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
     if (isNaN(pageNum) || pageNum < 1) return res.status(400).json({ error: 'page must be >=1' });
     if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) return res.status(400).json({ error: 'limit 1–100' });
 
-    let publicBool;
+    let parsedIsPublic;
     if (is_public !== undefined) {
-      if (is_public === 'true') publicBool = true;
-      else if (is_public === 'false') publicBool = false;
+      if (is_public === 'true') parsedIsPublic = true;
+      else if (is_public === 'false') parsedIsPublic = false;
       else return res.status(400).json({ error: 'is_public must be true or false' });
     }
 
@@ -153,9 +153,28 @@ export const listGroupsController = async (req, res) => {
       }
     }
 
-    const offset = (pageNum - 1) * limitNum;
-    const listedGroups = await groupService.listGroups({ is_public: publicBool, topic_tags: tagsArray, limit: limitNum, offset });
-    return res.status(200).json(listedGroups);
+    let result;
+    if (cursor) {
+      // Cursor-based pagination
+      result = await groupService.listGroupsCursor({ limit: limitNum, cursor, direction, is_public: parsedIsPublic, topic_tags: tagsArray, created_by });
+    } else {
+      // Offset-based pagination
+      result = await groupService.listGroupsOffset({ limit: limitNum, page: pageNum, is_public: parsedIsPublic, topic_tags: tagsArray, created_by });
+    }
+
+    const pagination = {
+      page: cursor ? null : pageNum,
+      limit: limitNum,
+      total: result.total || null,
+      totalPages: result.totalPages || null,
+      hasNext: !!result.nextCursor || (pageNum && pageNum < result.totalPages),
+      hasPrev: !!result.prevCursor || (pageNum && pageNum > 1),
+      nextCursor: result.nextCursor || null,
+      prevCursor: result.prevCursor || null
+    };
+
+    return res.status(200).json({ groups: result.groups, pagination });
+
   } catch (err) {
     console.error('List Groups Error:', err);
     return res.status(500).json({ ok: false, message: 'Failed to list groups', error: err.message });
@@ -189,56 +208,50 @@ export const joinGroupController = async (req, res) => {
 // Search Groups (with filters)
 export const searchGroupsController = async (req, res) => {
   try {
-    const clerkUser = {
-      id: req.user.id,
-      email: req.user.claims.email,
-      firstName: req.user.claims.first_name,
-      lastName: req.user.claims.last_name,
-      avatarUrl: req.user.claims.avatar_url,
-    };
-    await getOrCreateUser(clerkUser);
+    await getInternalUser(req);
 
-    const { query, isPublic, topicTags, createdBy, page = '1', limit = '10' } = req.query;
-    const parsedPage = Number(page);
-    const parsedLimit = Number(limit);
-    if (isNaN(parsedPage) || parsedPage < 1) return res.status(400).json({ error: 'invalid_page', message: 'Page must be a positive number' });
-    if (isNaN(parsedLimit) || parsedLimit < 1) return res.status(400).json({ error: 'invalid_limit', message: 'Limit must be a positive number' });
+    const { query, page = '1', limit = '10', cursor, direction = 'next', isPublic, topicTags, createdBy } = req.query;
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+
+    if (isNaN(pageNum) || pageNum < 1) return res.status(400).json({ error: 'invalid_page' });
+    if (isNaN(limitNum) || limitNum < 1) return res.status(400).json({ error: 'invalid_limit' });
 
     let parsedIsPublic;
     if (isPublic !== undefined) {
-      if (isPublic !== 'true' && isPublic !== 'false') {
-        return res.status(400).json({ error: 'invalid_isPublic', message: 'isPublic must be true or false' });
-      }
+      if (isPublic !== 'true' && isPublic !== 'false') return res.status(400).json({ error: 'invalid_isPublic' });
       parsedIsPublic = isPublic === 'true';
     }
 
     let parsedTopicTags;
-    if (topicTags) {
-      parsedTopicTags = typeof topicTags === 'string'
-        ? topicTags.split(',').map(tag => tag.trim())
-        : [];
-    }
-
-    if (createdBy && !isUuid(createdBy)) {
-      return res.status(400).json({ error: 'invalid_createdBy', message: 'createdBy must be a valid UUID' });
-    }
+    if (topicTags) parsedTopicTags = typeof topicTags === 'string' ? topicTags.split(',').map(t => t.trim()) : topicTags;
 
     const result = await groupService.searchGroups({
       query,
-      isPublic: parsedIsPublic,
-      topicTags: parsedTopicTags,
-      createdBy,
-      page: parsedPage,
-      limit: parsedLimit,
+      is_public: parsedIsPublic,
+      topic_tags: parsedTopicTags,
+      created_by: createdBy,
+      page: pageNum,
+      limit: limitNum,
+      cursor,
+      direction
     });
 
-    if (!result.ok) {
-      return res.status(500).json({ error: 'server_error', message: result.error });
-    }
+    const pagination = {
+      page: cursor ? null : pageNum,
+      limit: limitNum,
+      total: result.total || null,
+      totalPages: result.totalPages || null,
+      hasNext: !!result.nextCursor || (pageNum && pageNum < result.totalPages),
+      hasPrev: !!result.prevCursor || (pageNum && pageNum > 1),
+      nextCursor: result.nextCursor || null,
+      prevCursor: result.prevCursor || null
+    };
 
-    return res.status(200).json({ ok: true, groups: result.groups });
+    return res.status(200).json({ ok: true, groups: result.groups, pagination });
+
   } catch (err) {
-    console.error('search groups error:', err);
-    return res.status(500).json({ error: 'server_error', message: 'Failed to search groups' });
+    console.error('Search Groups Error:', err);
+    return res.status(500).json({ ok: false, message: 'Failed to search groups', error: err.message });
   }
 };

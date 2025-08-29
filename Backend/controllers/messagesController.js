@@ -149,17 +149,28 @@ export async function listMessagesController(req, res) {
     const userId = internalUser.id;
 
     const { groupId } = req.params;
-    let { page = 1, limit = 10, replyToId } = req.query;
+    let { limit = 20, cursor = null, direction = 'next', replyToId = null } = req.query;
 
-    // validation
     if (!groupId) return res.status(400).json({ error: 'groupId is required' });
-    page = parseInt(page, 10);
-    limit = parseInt(limit, 10);
-    if (isNaN(page) || page < 1) page = 1;
-    if (isNaN(limit) || limit < 1 || limit > 100) limit = 10;
 
-    const result = await listMessages(groupId, userId, page, limit, replyToId);
-    return res.status(200).json(result);
+    limit = parseInt(limit, 10);
+    if (isNaN(limit) || limit < 1 || limit > 100) limit = 20;
+    if (direction !== 'next' && direction !== 'prev') direction = 'next';
+
+    // Call service with cursor-based pagination
+    const result = await listMessages({ groupId, userId, limit, cursor, direction, replyToId });
+
+    // Build unified pagination metadata
+    const pagination = {
+      total: result.pagination.total || null,
+      limit: result.pagination.limit,
+      nextCursor: result.pagination.nextCursor || null,
+      prevCursor: result.pagination.prevCursor || null,
+      hasNext: !!result.pagination.nextCursor,
+      hasPrev: !!result.pagination.prevCursor
+    };
+
+    return res.status(200).json({ messages: result.messages, pagination });
 
   } catch (err) {
     if (err.message.includes('User is not a participant')) {
@@ -168,9 +179,11 @@ export async function listMessagesController(req, res) {
     if (err.message.includes('Reply-to message not found')) {
       return res.status(404).json({ error: err.message });
     }
+    console.error('List Messages Error:', err.message);
     return res.status(500).json({ error: 'Server error' });
   }
 }
+
 
 // f. Mark Message as Read Controller
 export async function markMessageAsReadController(req, res) {
