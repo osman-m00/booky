@@ -1,3 +1,4 @@
+import { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "../config/supabase";
 
 // Store channels to reuse them
@@ -13,8 +14,8 @@ export const realTimeService = {
       channels[key] = supabase
         .channel(key)
         .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'messages', filter: `group_id=eq.${groupId}` },
+          "postgres_changes",
+          { event: "*", schema: "public", table: "messages", filter: `group_id=eq.${groupId}` },
           payload => callback(payload)
         )
         .subscribe();
@@ -28,8 +29,8 @@ export const realTimeService = {
       channels[key] = supabase
         .channel(key)
         .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'reviews', filter: `book_id=eq.${bookId}` },
+          "postgres_changes",
+          { event: "*", schema: "public", table: "reviews", filter: `book_id=eq.${bookId}` },
           payload => callback(payload)
         )
         .subscribe();
@@ -43,8 +44,24 @@ export const realTimeService = {
       channels[key] = supabase
         .channel(key)
         .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'group_participants', filter: `group_id=eq.${groupId}` },
+          "postgres_changes",
+          { event: "*", schema: "public", table: "group_participants", filter: `group_id=eq.${groupId}` },
+          payload => callback(payload)
+        )
+        .subscribe();
+    }
+    return channels[key];
+  },
+
+  // ✅ New: subscribe to groups metadata (updates, deletes, etc.)
+  subscribeToGroups: (groupId, callback) => {
+    const key = `groups:${groupId}`;
+    if (!channels[key]) {
+      channels[key] = supabase
+        .channel(key)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "groups", filter: `id=eq.${groupId}` },
           payload => callback(payload)
         )
         .subscribe();
@@ -61,9 +78,9 @@ export const realTimeService = {
       channels[key] = supabase.channel(key).subscribe();
     }
     channels[key].send({
-      type: 'broadcast',
-      event: 'message_change',
-      payload
+      type: "broadcast",
+      event: "message_change",
+      payload,
     });
   },
 
@@ -73,9 +90,9 @@ export const realTimeService = {
       channels[key] = supabase.channel(key).subscribe();
     }
     channels[key].send({
-      type: 'broadcast',
-      event: 'review_change',
-      payload
+      type: "broadcast",
+      event: "review_change",
+      payload,
     });
   },
 
@@ -85,9 +102,22 @@ export const realTimeService = {
       channels[key] = supabase.channel(key).subscribe();
     }
     channels[key].send({
-      type: 'broadcast',
-      event: 'participant_change',
-      payload
+      type: "broadcast",
+      event: "participant_change",
+      payload,
     });
-  }
+  },
+
+  // ✅ New: broadcast group updates (metadata changes)
+  broadcastGroup: (groupId, payload) => {
+    const key = `groups:${groupId}`;
+    if (!channels[key]) {
+      channels[key] = supabase.channel(key).subscribe();
+    }
+    channels[key].send({
+      type: "broadcast",
+      event: "group_change",
+      payload,
+    });
+  },
 };

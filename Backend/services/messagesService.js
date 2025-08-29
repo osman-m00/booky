@@ -47,6 +47,11 @@ async function createMessage(userId, groupId, content, messageType, replyToId = 
 
     if (insertError) throw new Error('Failed to insert message');
 
+      realTimeService.broadcastMessage(groupId, {
+      event: "CREATE",
+      message: newMessage,
+    });
+
     return newMessage;
   } catch (err) {
     console.error(err);
@@ -102,6 +107,10 @@ async function updateMessage(messageId, userId, content) {
     if (updatedError || !updatedMessage) {
       throw new Error('Failed to update message');
     }
+      realTimeService.broadcastMessage(groupId, {
+      event: "UPDATE",
+      message: updatedMessage,
+    });
 
     return updatedMessage;
   } catch (error) {
@@ -129,6 +138,11 @@ async function deleteMessage(messageId, userId){
     .delete()
     .eq('id', messageId)
     if(deleteError) throw new Error('Failed to delete message')
+
+      realTimeService.broadcastMessage(groupId, {
+      event: "CREATE",
+      message: newMessage,
+    });
         return {ok: true, message: 'Message deleted successfully'}
     }catch(error){
     console.error('Error deleting message:', error.message);

@@ -1,60 +1,69 @@
-const {supabase} = require('../config/supabase');
-const {ensureBookInDb}=require('./booksService');
+const { supabase } = require('../config/supabase');
+const { ensureBookInDb } = require('./booksService');
+const { realTimeService } = require('./realtimeService'); 
 
 async function createReview(userId, bookId, rating, content) {
-const checkId = await ensureBookInDb(bookId);
+  await ensureBookInDb(bookId);
 
   const { data, error } = await supabase
     .from('reviews')
     .insert([
       { user_id: userId, book_id: bookId, rating, content }
     ])
-    .select('id,rating,content,created_at,user:users(id, name, email)')
+    .select('id, rating, content, created_at, user:users(id, name, email)')
     .single();
 
   if (error) {
     if (error.code === '23505') {
-      // duplicate (user_id, book_id) exists
       throw new Error('User has already reviewed this book.');
     }
-    throw error; 
+    throw error;
+  }
+
+  realTimeService.broadcastReview(bookId, {
+    event: "CREATE",
+    review: data,
+  });
+
+  return data;
+}
+
+async function getReviewById(reviewId) {
+  const { data, error } = await supabase
+    .from('reviews')
+    .select('id, rating, content, created_at, user:users(name, avatar_url)')
+    .eq('id', reviewId)
+    .single();
+
+  if (error || !data) {
+    throw new Error(`Could not find review, error: ${error?.message}`);
   }
 
   return data;
 }
 
-async function getReviewById(reviewId){
-const {data, error} = await supabase
-.from('reviews')
-.select('id, rating, content, created_at, user:users(name, avatar_url)')
-.eq('id', reviewId)
-.single();
-if(error || !data){throw new Error(`couldnt find review, error:${error.message}`)}
-return data;
-}
-
-async function updateReview(reviewId, userId, rating, content){
+async function updateReview(reviewId, userId, rating, content) {
   const updates = {};
-  if(rating !== undefined) updates.rating = rating;
+  if (rating !== undefined) updates.rating = rating;
   if (content !== undefined) updates.content = content;
 
-//check if review exists firsts
-const{data: review, error: reviewError} = await supabase
-.from('reviews')
-.select('id')
-.eq('id', reviewId)
-.eq('user_id', userId)
-.single();
-if(reviewError || !review){
-    throw new Error('review not found');
-}
-//update the review
-const {data, error} = await supabase
-.from('reviews')
-.update(updates)
-.eq('id', reviewId)
-.eq('user_id', userId)
-  .select(`
+  const { data: review, error: reviewError } = await supabase
+    .from('reviews')
+    .select('id, book_id')
+    .eq('id', reviewId)
+    .eq('user_id', userId)
+    .single();
+
+  if (reviewError || !review) {
+    throw new Error('Review not found');
+  }
+
+  const { data, error } = await supabase
+    .from('reviews')
+    .update(updates)
+    .eq('id', reviewId)
+    .eq('user_id', userId)
+    .select(`
       id,
       rating,
       content,
@@ -62,20 +71,24 @@ const {data, error} = await supabase
       updated_at,
       user:users(name, avatar_url)
     `)
-.single();
+    .single();
 
- if(error){
-    if(error.code == 'PGRST116') throw new Error('not found');
-    throw new Error (`update_failed:${error.message}`);
+  if (error) {
+    throw new Error(`update_failed: ${error.message}`);
   }
+
+  realTimeService.broadcastReview(review.book_id, {
+    event: "UPDATE",
+    review: data,
+  });
+
   return data;
 }
 
 async function deleteReview(reviewId, userId) {
-  // Step 1: Check if review exists and belongs to the user
   const { data: review, error: fetchError } = await supabase
     .from("reviews")
-    .select("*")
+    .select("id, book_id")
     .eq("id", reviewId)
     .eq("user_id", userId)
     .single();
@@ -84,7 +97,6 @@ async function deleteReview(reviewId, userId) {
     throw new Error("Review not found or does not belong to the user");
   }
 
-  // Step 2: Delete the review
   const { error: deleteError } = await supabase
     .from("reviews")
     .delete()
@@ -95,14 +107,17 @@ async function deleteReview(reviewId, userId) {
     throw new Error("Error deleting review");
   }
 
-  // Step 3: Return success message
+  realTimeService.broadcastReview(review.book_id, {
+    event: "DELETE",
+    reviewId: reviewId,
+  });
+
   return { message: "Review deleted successfully" };
 }
 
 async function listReviews(bookId, page = 1, limit = 10, filters = {}, sort = 'newest') {
   const offset = (page - 1) * limit;
 
-  // Start building the query
   let query = supabase
     .from("reviews")
     .select(
@@ -121,7 +136,6 @@ async function listReviews(bookId, page = 1, limit = 10, filters = {}, sort = 'n
     )
     .eq("book_id", bookId);
 
-  // Apply optional filters
   if (filters.userId) {
     query = query.eq("user_id", filters.userId);
   }
@@ -129,7 +143,6 @@ async function listReviews(bookId, page = 1, limit = 10, filters = {}, sort = 'n
     query = query.eq("rating", filters.rating);
   }
 
-  // Apply sorting
   switch (sort) {
     case 'newest':
       query = query.order('created_at', { ascending: false });
@@ -147,12 +160,9 @@ async function listReviews(bookId, page = 1, limit = 10, filters = {}, sort = 'n
       query = query.order('created_at', { ascending: false });
   }
 
-  // Apply pagination
   query = query.range(offset, offset + limit - 1);
 
-  // Execute query
   const { data: reviews, error, count } = await query;
-
   if (error) throw new Error('Error fetching reviews');
 
   return {
@@ -191,24 +201,15 @@ async function searchReview(bookId, userId, rating, page = 1, limit = 10) {
       )
     `);
 
-  if (bookId !== undefined) {
-    query = query.eq('book_id', bookId);
-  }
+  if (bookId !== undefined) query = query.eq('book_id', bookId);
+  if (userId !== undefined) query = query.eq('user_id', userId);
 
-  if (userId !== undefined) {
-    query = query.eq('user_id', userId);
+  if (typeof rating === 'number') {
+    query = query.eq('rating', rating);
+  } else if (rating && typeof rating === 'object') {
+    if (rating.min !== undefined) query = query.gte('rating', rating.min);
+    if (rating.max !== undefined) query = query.lte('rating', rating.max);
   }
-
-if (typeof rating === 'number') {
-  query = query.eq('rating', rating); // exact match
-} else if (rating && typeof rating === 'object') {
-  if (rating.min !== undefined) {
-    query = query.gte('rating', rating.min);
-  }
-  if (rating.max !== undefined) {
-    query = query.lte('rating', rating.max);
-  }
-}
 
   const from = (page - 1) * limit;
   const to = from + limit - 1;
@@ -216,29 +217,28 @@ if (typeof rating === 'number') {
 
   try {
     const { data, error } = await query;
-    if (error) {
-      throw new Error(error.message || 'Query failed for filtering');
-    }
+    if (error) throw new Error(error.message || 'Query failed for filtering');
 
     return {
       ok: true,
-      reviews: data.map(d=>({
+      reviews: data.map(d => ({
         id: d.id,
         rating: d.rating,
         content: d.content,
         user: d.users,
-        book:d.books
-
+        book: d.books,
       }))
     };
   } catch (err) {
-    return {
-      ok: false,
-      error: err.message
-    };
+    return { ok: false, error: err.message };
   }
 }
 
-
-
-module.exports = {createReview, getReviewById, updateReview, deleteReview, listReviews, searchReview};
+module.exports = {
+  createReview,
+  getReviewById,
+  updateReview,
+  deleteReview,
+  listReviews,
+  searchReview
+};

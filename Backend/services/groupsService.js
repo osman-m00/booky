@@ -1,5 +1,6 @@
 const {supabase} = require('../config/supabase');
 const  nanoid  = require('nanoid'); 
+const { realTimeService } = require('./realtimeService'); 
 
 async function createGroup(name, description, is_public, topic_tags, created_by, member_limit, avatar_url) {
   const newGroup = {
@@ -298,6 +299,10 @@ async function joinGroup(invite_code, groupId, userId) {
 
     if (insertError) throw new Error('Failed to insert member into group');
 
+  realTimeService.broadcastGroup(groupId, {
+  event: "UPDATE",
+  group: updatedData[0],
+});
     return {
       ok: true,
       message: 'Member inserted successfully',
