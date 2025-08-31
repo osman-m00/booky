@@ -9,7 +9,7 @@ import ClerkProviderWithRouter from './auth/ClerkProviderWithRouter.jsx'
 createRoot(document.getElementById('root')).render(
   <StrictMode>
   <BrowserRouter>
-    <ClerkProviderWithRouter>
+    <ClerkProviderWithRouter afterSignOutUrl="/">
     <App />
     </ClerkProviderWithRouter>
     </BrowserRouter>
