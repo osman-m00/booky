@@ -156,29 +156,53 @@ const getBooksCursor = async ({ limit = 10, cursor = null, direction = 'next', s
 // ------------------------------
 // Fetch English-only books from Google API
 // ------------------------------
-const searchEnglishBooksFromApi = async (query, maxResults = 4) => {
+
+
+const searchEnglishBooksWithPopularity = async (subject, limit = 8) => {
   try {
-    const response = await axios.get(
-      `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=${maxResults}&langRestrict=en`
-    );
+    const url = `https://www.googleapis.com/books/v1/volumes?q=subject:${encodeURIComponent(subject)}&maxResults=${limit * 5}&langRestrict=en&printType=books&orderBy=relevance`;
+
+    const response = await axios.get(url);
 
     if (!response.data.items || response.data.items.length === 0) {
-      return []; // no books found
+      return [];
     }
 
-    return response.data.items.map(book => ({
-      id: book.id,
-      title: book.volumeInfo.title,
-      authors: book.volumeInfo.authors?.join(', ') || 'Unknown Author',
-      description: book.volumeInfo.description || 'No description available',
-      coverImage: book.volumeInfo.imageLinks?.thumbnail || null,
-      publishedDate: book.volumeInfo.publishedDate,
-      pageCount: book.volumeInfo.pageCount,
-      rating: book.volumeInfo.averageRating
-    }));
+    let books = response.data.items.map(book => {
+      const info = book.volumeInfo;
+      const avgRating = info.averageRating || 0;
+      const ratingsCount = info.ratingsCount || 0;
+
+      const popularity = avgRating * Math.log10(ratingsCount + 1);
+
+      return {
+        id: book.id,
+        title: info.title,
+        authors: info.authors?.join(', ') || 'Unknown Author',
+        description: info.description || 'No description available',
+        coverImage: info.imageLinks?.thumbnail || null,
+        publishedDate: info.publishedDate,
+        pageCount: info.pageCount,
+        rating: avgRating,
+        ratingsCount,
+        popularity,
+        categories: info.categories || []
+      };
+    });
+
+    // Filter irrelevant stuff
+    books = books.filter(b => {
+      const t = b.title.toLowerCase();
+      return !t.includes('catalogue') && !t.includes('subject headings');
+    });
+
+    // Sort by popularity
+    books.sort((a, b) => b.popularity - a.popularity);
+
+    return books.slice(0, limit);
   } catch (error) {
     console.error('Google Books API error:', error.response?.data || error.message);
-    throw new Error('Failed to fetch English books from external API');
+    throw new Error('Failed to fetch featured books');
   }
 };
 
@@ -193,5 +217,5 @@ module.exports = {
   ensureBookInDb,
   getBooksOffset,
   getBooksCursor,
-  searchEnglishBooksFromApi
+  searchEnglishBooksWithPopularity
 };

@@ -1,5 +1,5 @@
 const { getOrCreateUser } = require('../services/usersServices');
-const { ensureBookInDb, getBookById, getBooksCursor, getBooksOffset, searchEnglishBooksFromApi } = require('../services/booksService');
+const { ensureBookInDb, getBookById, getBooksCursor, getBooksOffset, searchEnglishBooksWithPopularity } = require('../services/booksService');
 
 // Helper: Get internal user from Clerk
 async function getInternalUser(req) {
@@ -136,7 +136,7 @@ const getFeaturedBooks = async (req, res) => {
     const query = req.query.query || 'fiction';
     const limit = Number(req.query.limit) || 4;
 
-    const books = await searchEnglishBooksFromApi(query, limit);
+    const books = await searchEnglishBooksWithPopularity(query, limit);
 
     res.status(200).json({ data: books });
   } catch (error) {

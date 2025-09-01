@@ -10,7 +10,7 @@ const FeaturedBooks = () => {
     const fetchBooks = async () => {
       try {
         const res = await axios.get(
-        "http://localhost:3000/api/books/featured?query=fiction&limit=4"
+          "http://localhost:3000/api/books/featured?query=fiction&limit=4"
         );
         const fetchedBooks = res.data.data || [];
 
@@ -46,13 +46,13 @@ const FeaturedBooks = () => {
           <p className="mb-4 text-lg font-medium text-center">
             Because Adam liked these:
           </p>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-6 justify-items-center">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-55 ml-30 justify-items-center">
             {books.map((book) => (
               <div
                 key={book.id}
-                className="flex flex-col items-center border border-gray-500 rounded-lg p-4 transform transition duration-200 hover:scale-105 w-60"
+                className="flex flex-col items-center border border-gray-500 rounded-lg p-4 transform transition duration-200 hover:scale-105 w-60 h-60"
               >
-                <div className="w-24 h-36 bg-gray-300 rounded mb-2">
+                <div className="w-24 h-36 bg-gray-300 rounded mb-2 flex-shrink-0">
                   {book.coverImage ? (
                     <img
                       src={book.coverImage}
@@ -61,8 +61,12 @@ const FeaturedBooks = () => {
                     />
                   ) : null}
                 </div>
-                <p className="font-semibold text-center">{book.title}</p>
-                <p className="text-sm text-gray-500 text-center">{book.authors}</p>
+                <p className="font-semibold text-center text-sm line-clamp-2">
+                  {book.title}
+                </p>
+                <p className="text-xs text-gray-500 text-center line-clamp-1">
+                  {book.authors}
+                </p>
               </div>
             ))}
           </div>
@@ -74,8 +78,8 @@ const FeaturedBooks = () => {
             He got recommended this:
           </p>
           {recommended ? (
-            <div className="flex flex-col items-center border border-gray-500 rounded-lg p-4 transform transition duration-200 hover:scale-105 w-60">
-              <div className="w-24 h-36 bg-gray-300 rounded mb-2">
+            <div className="flex flex-col items-center border border-gray-500 rounded-lg p-4 transform transition duration-200 hover:scale-105 w-60 h-60">
+              <div className="w-24 h-36 bg-gray-300 rounded mb-2 flex-shrink-0">
                 {recommended.coverImage ? (
                   <img
                     src={recommended.coverImage}
@@ -84,8 +88,12 @@ const FeaturedBooks = () => {
                   />
                 ) : null}
               </div>
-              <p className="font-semibold text-center">{recommended.title}</p>
-              <p className="text-sm text-gray-500 text-center">{recommended.authors}</p>
+              <p className="font-semibold text-center text-sm line-clamp-2">
+                {recommended.title}
+              </p>
+              <p className="text-xs text-gray-500 text-center line-clamp-1">
+                {recommended.authors}
+              </p>
             </div>
           ) : (
             <p>Loading recommended book...</p>

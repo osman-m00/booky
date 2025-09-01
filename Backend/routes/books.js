@@ -3,7 +3,7 @@ const router = express.Router();
 const { searchBooks, getBookDetails,  getFeaturedBooks } = require('../controllers/booksController');
 const clerkAuth = require('../middleware/clerkAuth');
 
-
+router.get('/featured', getFeaturedBooks);
 router.get('/search', searchBooks);
 router.get('/:id', getBookDetails);
 
@@ -18,7 +18,7 @@ router.get('/search/prev', (req, res) => {
   searchBooks(req, res);
 });
 
-router.get('/featured', getFeaturedBooks);
+
 
 
 module.exports = router;
