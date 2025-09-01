@@ -1,15 +1,25 @@
 const { createClient } = require('@supabase/supabase-js');
+require('dotenv').config(); // MUST run before using process.env
+
+
 
 const supabaseUrl = process.env.SUPABASE_URL;
 
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Use ANON key for public requests (frontend) and service role key for backend server
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if(!supabaseUrl || !supabaseKey) {
+if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
     throw new Error('Missing environment variables');
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey, {
-    auth: {persistSession: false},
+// Export two clients: one public, one server
+const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    auth: { persistSession: false },
 });
 
-module.exports = {supabase};
+const supabasePublic = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { persistSession: false },
+});
+
+module.exports = { supabase, supabasePublic };

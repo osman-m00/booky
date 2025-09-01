@@ -1,4 +1,4 @@
-const supabase = require('../supabaseClient');
+const supabase = require('../config/supabase')
 
 async function getOrCreateUser(clerkUser) {
   try {

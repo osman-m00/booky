@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { clerkAuth } = require('../middleware/clerkAuth');
+const clerkAuth = require('../middleware/clerkAuth');
 
 const {
   createMessageController,
@@ -9,7 +9,7 @@ const {
   deleteMessageController,
   listMessagesController,
   markMessageAsReadController
-} = require('../controllers/messageController');
+} = require('../controllers/messagesController');
 
 router.use(clerkAuth);
 

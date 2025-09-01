@@ -1,19 +1,17 @@
 // controllers/messageController.js
-import {
+const {
   createMessage,
   getMessage,
   updateMessage,
   deleteMessage,
   listMessages,
   markMessageAsRead
-} from '../services/messageService.js';
-import { realTimeService } from '../services/realtimeService.js';
-
-
-import { getOrCreateUser } from '../services/usersService.js';
+} = require('../services/messagesService');
+const { realTimeService } = require('../services/realtimeService');
+const { getOrCreateUser } = require('../services/usersServices');
 
 // a. Create Message Controller
-export async function createMessageController(req, res) {
+async function createMessageController(req, res) {
   try {
     const clerkUser = {
       id: req.user.id,
@@ -42,7 +40,7 @@ export async function createMessageController(req, res) {
     realTimeService.broadcastMessage(groupId, {
       event: 'INSERT',
       message,
-      });
+    });
     return res.status(201).json(message);
 
   } catch (err) {
@@ -57,7 +55,7 @@ export async function createMessageController(req, res) {
 }
 
 // b. Get Message Controller
-export async function getMessageController(req, res) {
+async function getMessageController(req, res) {
   try {
     const { messageId } = req.params;
     if (!messageId || messageId.length < 10) {
@@ -73,7 +71,7 @@ export async function getMessageController(req, res) {
 }
 
 // c. Update Message Controller
-export async function updateMessageController(req, res) {
+async function updateMessageController(req, res) {
   try {
     const clerkUser = {
       id: req.user.id,
@@ -94,9 +92,9 @@ export async function updateMessageController(req, res) {
 
     const updated = await updateMessage(messageId, userId, content);
     realTimeService.broadcastMessage(updated.group_id, {
-    event: 'UPDATE',
-    message: updated,
-});
+      event: 'UPDATE',
+      message: updated,
+    });
     return res.status(200).json(updated);
 
   } catch (err) {
@@ -108,7 +106,7 @@ export async function updateMessageController(req, res) {
 }
 
 // d. Delete Message Controller
-export async function deleteMessageController(req, res) {
+async function deleteMessageController(req, res) {
   try {
     const userId = req.user.id;
     const { messageId } = req.params;
@@ -118,7 +116,7 @@ export async function deleteMessageController(req, res) {
       return res.status(404).json({ error: 'Message not found' });
     }
 
-    const groupId = message.group_id; // save groupId for broadcasting
+    const groupId = message.group_id;
 
     await deleteMessage(messageId, userId);
 
@@ -134,9 +132,8 @@ export async function deleteMessageController(req, res) {
   }
 }
 
-
 // e. List Messages Controller
-export async function listMessagesController(req, res) {
+async function listMessagesController(req, res) {
   try {
     const clerkUser = {
       id: req.user.id,
@@ -157,10 +154,8 @@ export async function listMessagesController(req, res) {
     if (isNaN(limit) || limit < 1 || limit > 100) limit = 20;
     if (direction !== 'next' && direction !== 'prev') direction = 'next';
 
-    // Call service with cursor-based pagination
     const result = await listMessages({ groupId, userId, limit, cursor, direction, replyToId });
 
-    // Build unified pagination metadata
     const pagination = {
       total: result.pagination.total || null,
       limit: result.pagination.limit,
@@ -184,9 +179,8 @@ export async function listMessagesController(req, res) {
   }
 }
 
-
 // f. Mark Message as Read Controller
-export async function markMessageAsReadController(req, res) {
+async function markMessageAsReadController(req, res) {
   try {
     const clerkUser = {
       id: req.user.id,
@@ -207,3 +201,13 @@ export async function markMessageAsReadController(req, res) {
     return res.status(500).json({ error: 'Server error' });
   }
 }
+
+// Export all controllers using CommonJS
+module.exports = {
+  createMessageController,
+  getMessageController,
+  updateMessageController,
+  deleteMessageController,
+  listMessagesController,
+  markMessageAsReadController
+};

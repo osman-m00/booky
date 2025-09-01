@@ -1,4 +1,4 @@
-const supabase = require('../supabaseClient'); // your Supabase client
+const supabase = require('../config/supabase') // your Supabase client
 
 module.exports = async function requireUser(req, res, next) {
   try {

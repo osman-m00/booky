@@ -1,10 +1,10 @@
 // controllers/reviewsController.js
-import { validate as isUuid } from 'uuid';
-import * as reviewsService from '../services/reviewsService.js';
-import { getOrCreateUser } from '../services/usersService.js';
-import { realTimeService } from '../services/realtimeService.js';
+const { validate: isUuid } = require('uuid');
+const reviewsService = require('../services/reviewsService');
+const { getOrCreateUser } = require('../services/usersServices');
+const { realTimeService } = require('../services/realtimeService');
 
-export async function createReview(req, res) {
+async function createReview(req, res) {
   try {
     const clerkUser = {
       id: req.user.id,
@@ -52,7 +52,7 @@ export async function createReview(req, res) {
   }
 }
 
-export async function getReview(req, res) {
+async function getReview(req, res) {
   try {
     const id = req.params.id;
     if (!id || !isUuid(id)) return res.status(400).json({ error: 'invalid_id', message: 'Review ID must be a valid UUID' });
@@ -67,7 +67,7 @@ export async function getReview(req, res) {
   }
 }
 
-export async function deleteReview(req, res) {
+async function deleteReview(req, res) {
   try {
     const clerkUser = {
       id: req.user.id,
@@ -82,14 +82,12 @@ export async function deleteReview(req, res) {
     const id = req.params.id;
     if (!id || !isUuid(id)) return res.status(400).json({ error: 'invalid_id', message: 'Review ID must be UUID' });
 
-    // Fetch review to get bookId before deletion
     const review = await reviewsService.getReviewById(id);
     if (!review) return res.status(404).json({ error: 'not_found', message: 'Review not found' });
     const bookId = review.book_id;
 
     const result = await reviewsService.deleteReview(id, userId);
 
-    // Broadcast deletion
     realTimeService.broadcastReview(bookId, {
       event: 'DELETE',
       reviewId: id
@@ -104,7 +102,7 @@ export async function deleteReview(req, res) {
   }
 }
 
-export async function updateReview(req, res) {
+async function updateReview(req, res) {
   try {
     const clerkUser = {
       id: req.user.id,
@@ -129,14 +127,12 @@ export async function updateReview(req, res) {
       return res.status(400).json({ error: 'invalid_content', message: 'Content must be string <= 1000 chars' });
     }
 
-    // Fetch review to get bookId before update
     const review = await reviewsService.getReviewById(reviewId);
     if (!review) return res.status(404).json({ error: 'review_not_found', message: 'Review not found' });
     const bookId = review.book_id;
 
     const updatedReview = await reviewsService.updateReview(reviewId, userId, { rating, content });
 
-    // Broadcast update
     realTimeService.broadcastReview(bookId, {
       event: 'UPDATE',
       review: updatedReview
@@ -151,7 +147,7 @@ export async function updateReview(req, res) {
   }
 }
 
-export async function listReviews(req, res) {
+async function listReviews(req, res) {
   try {
     const { bookId } = req.query;
     const page = Number(req.query.page) || 1;
@@ -175,7 +171,7 @@ export async function listReviews(req, res) {
   }
 }
 
-export async function searchReviews(req, res) {
+async function searchReviews(req, res) {
   try {
     const clerkUser = {
       id: req.user.id,
@@ -208,3 +204,13 @@ export async function searchReviews(req, res) {
     return res.status(500).json({ error: 'server_error', message: 'Failed to search reviews' });
   }
 }
+
+// Export all functions using CommonJS
+module.exports = {
+  createReview,
+  getReview,
+  deleteReview,
+  updateReview,
+  listReviews,
+  searchReviews,
+};

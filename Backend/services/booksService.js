@@ -1,18 +1,19 @@
 const axios = require('axios');
 const { supabase } = require('../config/supabase');
+const { supabasePublic } = require('../config/supabase'); // use public client
+
 const { encodeCursor, decodeCursor } = require('../utils/cursor');
 
 // ------------------------------
 // External API Functions
 // ------------------------------
-
 const searchBooksFromApi = async (query) => {
   try {
     const response = await axios.get(
       `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=10`
     );
 
-    const transformedBooks = response.data.items?.map(book => ({
+    return response.data.items?.map(book => ({
       id: book.id,
       title: book.volumeInfo.title,
       authors: book.volumeInfo.authors?.join(', ') || 'Unknown Author',
@@ -22,8 +23,6 @@ const searchBooksFromApi = async (query) => {
       pageCount: book.volumeInfo.pageCount,
       rating: book.volumeInfo.averageRating
     })) || [];
-
-    return transformedBooks;
   } catch (error) {
     throw new Error('Failed to fetch books from external API');
   }
@@ -59,9 +58,8 @@ const getBookById = async (id) => {
 // ------------------------------
 // DB Functions
 // ------------------------------
-
 const ensureBookInDb = async (bookId) => {
-  const { data: existing, error } = await supabase
+  const { data: existing, error } = await supabasePublic
     .from('books')
     .select('*')
     .eq('id', bookId)
@@ -88,7 +86,7 @@ const ensureBookInDb = async (bookId) => {
     language: book.language || 'en'
   };
 
-  const { data: inserted, error: insertError } = await supabase
+  const { data: inserted, error: insertError } = await supabasePublic
     .from('books')
     .insert([row])
     .select('*')
@@ -101,12 +99,11 @@ const ensureBookInDb = async (bookId) => {
 // ------------------------------
 // Offset-Based Pagination
 // ------------------------------
-
 const getBooksOffset = async ({ page = 1, limit = 10, search = '' }) => {
   const from = (page - 1) * limit;
   const to = from + limit - 1;
 
-  let query = supabase
+  let query = supabasePublic
     .from('books')
     .select('*', { count: 'exact' })
     .order('created_at', { ascending: false })
@@ -130,20 +127,17 @@ const getBooksOffset = async ({ page = 1, limit = 10, search = '' }) => {
 // ------------------------------
 // Cursor-Based Pagination
 // ------------------------------
-
 const getBooksCursor = async ({ limit = 10, cursor = null, direction = 'next', search = '' }) => {
-  let query = supabase
+  let query = supabasePublic
     .from('books')
     .select('*')
     .order('created_at', { ascending: direction === 'prev' })
     .limit(limit);
 
-  // Apply search filter
   if (search) {
     query = query.ilike('title', `%${search}%`).or(`author.ilike.%${search}%`);
   }
 
-  // Apply cursor if provided
   if (cursor) {
     const decodedCursor = decodeCursor(cursor);
     query = direction === 'next' ? query.lt('created_at', decodedCursor) : query.gt('created_at', decodedCursor);
@@ -159,15 +153,45 @@ const getBooksCursor = async ({ limit = 10, cursor = null, direction = 'next', s
   };
 };
 
+// ------------------------------
+// Fetch English-only books from Google API
+// ------------------------------
+const searchEnglishBooksFromApi = async (query, maxResults = 4) => {
+  try {
+    const response = await axios.get(
+      `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=${maxResults}&langRestrict=en`
+    );
+
+    if (!response.data.items || response.data.items.length === 0) {
+      return []; // no books found
+    }
+
+    return response.data.items.map(book => ({
+      id: book.id,
+      title: book.volumeInfo.title,
+      authors: book.volumeInfo.authors?.join(', ') || 'Unknown Author',
+      description: book.volumeInfo.description || 'No description available',
+      coverImage: book.volumeInfo.imageLinks?.thumbnail || null,
+      publishedDate: book.volumeInfo.publishedDate,
+      pageCount: book.volumeInfo.pageCount,
+      rating: book.volumeInfo.averageRating
+    }));
+  } catch (error) {
+    console.error('Google Books API error:', error.response?.data || error.message);
+    throw new Error('Failed to fetch English books from external API');
+  }
+};
+
+
 
 // ------------------------------
-// Exported Functions
+// Exports
 // ------------------------------
-
 module.exports = {
   searchBooksFromApi,
   getBookById,
   ensureBookInDb,
   getBooksOffset,
-  getBooksCursor
+  getBooksCursor,
+  searchEnglishBooksFromApi
 };

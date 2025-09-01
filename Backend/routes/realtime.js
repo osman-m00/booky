@@ -1,7 +1,7 @@
-import express from "express";
-import { realTimeService } from "../services/realTimeService.js";
-
+const express = require('express');
+const { realTimeService } = require('../services/realtimeService');
 const router = express.Router();
+
 
 /**
  * GET /connect
@@ -114,4 +114,4 @@ router.post("/subscribe", async (req, res) => {
   }
 });
 
-export default router;
+module.exports = router;

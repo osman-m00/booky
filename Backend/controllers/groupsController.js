@@ -1,8 +1,8 @@
 // controllers/groupsController.js
-import { groupService } from '../services/groupsService.js';
-import { getOrCreateUser } from '../services/usersService.js';
-import { isUuid } from 'uuid-validator';
-import { realTimeService } from '../services/realtimeService.js';
+const { groupService } = require('../services/groupsService');
+const { getOrCreateUser } = require('../services/usersServices');
+const { isUuid } = require('uuid');
+const { realTimeService } = require('../services/realtimeService');
 
 // Helper: Get internal user from Clerk
 async function getInternalUser(req) {
@@ -17,7 +17,7 @@ async function getInternalUser(req) {
 }
 
 // Create Group
-export const createGroupController = async (req, res) => {
+async function createGroupController(req, res) {
   try {
     const internalUser = await getInternalUser(req);
     const userId = internalUser.id;
@@ -48,12 +48,11 @@ export const createGroupController = async (req, res) => {
       is_public,
       topic_tags,
       userId,
-      null, // invite_code handled internally
+      null,
       member_limit,
       avatar_url
     );
 
-    // Broadcast creation
     realTimeService.broadcastGroup(group.id, { event: 'INSERT', group });
 
     return res.status(201).json(group);
@@ -61,10 +60,10 @@ export const createGroupController = async (req, res) => {
     console.error('Create Group Error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
-};
+}
 
 // Get Group
-export const getGroupController = async (req, res) => {
+async function getGroupController(req, res) {
   const groupId = req.params.groupId;
   try {
     const group = await groupService.getGroup(groupId);
@@ -74,10 +73,10 @@ export const getGroupController = async (req, res) => {
     console.error('Get Group Error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
-};
+}
 
 // Update Group
-export const updateGroupController = async (req, res) => {
+async function updateGroupController(req, res) {
   try {
     const internalUser = await getInternalUser(req);
     const userId = internalUser.id;
@@ -97,7 +96,6 @@ export const updateGroupController = async (req, res) => {
 
     if (!updatedGroup) return res.status(404).json({ ok: false, message: 'Group not found' });
 
-    // Broadcast update
     realTimeService.broadcastGroup(groupId, { event: 'UPDATE', group: updatedGroup });
 
     return res.status(200).json(updatedGroup);
@@ -105,10 +103,10 @@ export const updateGroupController = async (req, res) => {
     console.error('Update Group Error:', err);
     return res.status(500).json({ ok: false, message: 'Failed to update group', error: err.message });
   }
-};
+}
 
 // Delete Group
-export const deleteGroupController = async (req, res) => {
+async function deleteGroupController(req, res) {
   try {
     const internalUser = await getInternalUser(req);
     const userId = internalUser.id;
@@ -117,7 +115,6 @@ export const deleteGroupController = async (req, res) => {
     const deleted = await groupService.deleteGroup(userId, groupId);
     if (!deleted) return res.status(400).json({ ok: false, message: 'Failed to delete group' });
 
-    // Broadcast deletion
     realTimeService.broadcastGroup(groupId, { event: 'DELETE', groupId });
 
     return res.status(204).send();
@@ -125,12 +122,12 @@ export const deleteGroupController = async (req, res) => {
     console.error('Delete Group Error:', err);
     return res.status(500).json({ ok: false, message: 'Failed to delete group', error: err.message });
   }
-};
+}
 
 // List Groups
-export const listGroupsController = async (req, res) => {
+async function listGroupsController(req, res) {
   try {
-    await getInternalUser(req); // Ensure authentication
+    await getInternalUser(req);
 
     const { page = '1', limit = '10', cursor, direction = 'next', is_public, topic_tags, created_by } = req.query;
     const pageNum = Number(page);
@@ -155,10 +152,8 @@ export const listGroupsController = async (req, res) => {
 
     let result;
     if (cursor) {
-      // Cursor-based pagination
       result = await groupService.listGroupsCursor({ limit: limitNum, cursor, direction, is_public: parsedIsPublic, topic_tags: tagsArray, created_by });
     } else {
-      // Offset-based pagination
       result = await groupService.listGroupsOffset({ limit: limitNum, page: pageNum, is_public: parsedIsPublic, topic_tags: tagsArray, created_by });
     }
 
@@ -179,10 +174,10 @@ export const listGroupsController = async (req, res) => {
     console.error('List Groups Error:', err);
     return res.status(500).json({ ok: false, message: 'Failed to list groups', error: err.message });
   }
-};
+}
 
 // Join Group
-export const joinGroupController = async (req, res) => {
+async function joinGroupController(req, res) {
   try {
     const internalUser = await getInternalUser(req);
     const userId = internalUser.id;
@@ -192,7 +187,6 @@ export const joinGroupController = async (req, res) => {
     const result = await groupService.joinGroup(invite_code, groupId, userId);
     if (!result.ok) return res.status(400).json(result);
 
-    // Broadcast join
     realTimeService.broadcastGroup(groupId, {
       event: 'JOIN',
       user: { id: userId, name: internalUser.name, avatarUrl: internalUser.avatarUrl }
@@ -203,10 +197,10 @@ export const joinGroupController = async (req, res) => {
     console.error('Join Group Error:', err);
     return res.status(500).json({ ok: false, message: 'Failed to join group', error: err.message });
   }
-};
+}
 
-// Search Groups (with filters)
-export const searchGroupsController = async (req, res) => {
+// Search Groups
+async function searchGroupsController(req, res) {
   try {
     await getInternalUser(req);
 
@@ -254,4 +248,15 @@ export const searchGroupsController = async (req, res) => {
     console.error('Search Groups Error:', err);
     return res.status(500).json({ ok: false, message: 'Failed to search groups', error: err.message });
   }
+}
+
+// Export all controllers
+module.exports = {
+  createGroupController,
+  getGroupController,
+  updateGroupController,
+  deleteGroupController,
+  listGroupsController,
+  joinGroupController,
+  searchGroupsController
 };

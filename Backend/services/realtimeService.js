@@ -1,10 +1,11 @@
-import { RealtimeChannel } from "@supabase/supabase-js";
-import { supabase } from "../config/supabase";
+const { RealtimeChannel } = require("@supabase/supabase-js");
+const { supabase } = require("../config/supabase");
+
 
 // Store channels to reuse them
 const channels = {};
 
-export const realTimeService = {
+const realTimeService = {
   // ----------------------
   // Subscribe Functions
   // ----------------------
@@ -53,7 +54,6 @@ export const realTimeService = {
     return channels[key];
   },
 
-  // ✅ New: subscribe to groups metadata (updates, deletes, etc.)
   subscribeToGroups: (groupId, callback) => {
     const key = `groups:${groupId}`;
     if (!channels[key]) {
@@ -108,7 +108,6 @@ export const realTimeService = {
     });
   },
 
-  // ✅ New: broadcast group updates (metadata changes)
   broadcastGroup: (groupId, payload) => {
     const key = `groups:${groupId}`;
     if (!channels[key]) {
@@ -121,3 +120,6 @@ export const realTimeService = {
     });
   },
 };
+
+// Export for CommonJS
+module.exports = { realTimeService };

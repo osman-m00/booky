@@ -1,9 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { searchBooks, getBookDetails } = require('../controllers/booksController');
-const { clerkAuth } = require('../middleware/clerkAuth');
+const { searchBooks, getBookDetails,  getFeaturedBooks } = require('../controllers/booksController');
+const clerkAuth = require('../middleware/clerkAuth');
 
-router.use(clerkAuth);
 
 router.get('/search', searchBooks);
 router.get('/:id', getBookDetails);
@@ -18,5 +17,8 @@ router.get('/search/prev', (req, res) => {
   req.query.direction = 'prev';
   searchBooks(req, res);
 });
+
+router.get('/featured', getFeaturedBooks);
+
 
 module.exports = router;

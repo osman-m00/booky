@@ -1,6 +1,6 @@
 const { ensureBookInDb } = require('../services/booksService');
 const { addOrUpdate, listWithBooks, update, deleteBook } = require('../services/libraryService');
-const { getOrCreateUser } = require('../services/usersService');
+const { getOrCreateUser } = require('../services/usersServices')
 
 const VALID_STATUSES = ['want_to_read', 'currently_reading', 'completed', 'abandoned'];
 

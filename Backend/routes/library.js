@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { clerkAuth } = require('../middleware/clerkAuth');
+const clerkAuth = require('../middleware/clerkAuth');
 const { addToLibrary, listLibrary, updateLibraryItem, removeFromLibrary } = require('../controllers/libraryController');
 
 // Protect all routes

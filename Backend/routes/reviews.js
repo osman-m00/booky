@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const requireUser = require('../middleware/requireUser');
-const { clerkAuth } = require('../middleware/clerkAuth');
+const clerkAuth = require('../middleware/clerkAuth');
 
 const { createReview, getReview, deleteReview, listReviews, updateReview, searchReviews} = require('../controllers/reviewsController');
 
