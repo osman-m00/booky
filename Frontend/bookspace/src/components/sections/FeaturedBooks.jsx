@@ -1,6 +1,14 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 
+const SkeletonCard = () => (
+  <div className="flex flex-col items-center border border-gray-300 rounded-lg p-4 w-60 h-60 animate-pulse">
+    <div className="w-24 h-36 bg-gray-300 rounded mb-2" />
+    <div className="h-4 w-32 bg-gray-300 rounded mb-1" />
+    <div className="h-3 w-20 bg-gray-200 rounded" />
+  </div>
+);
+
 const FeaturedBooks = () => {
   const [books, setBooks] = useState([]);
   const [recommended, setRecommended] = useState(null);
@@ -13,7 +21,6 @@ const FeaturedBooks = () => {
           "http://localhost:3000/api/books/featured?query=fiction&limit=4"
         );
         const fetchedBooks = res.data.data || [];
-
         setBooks(fetchedBooks.slice(0, 3));
         setRecommended(fetchedBooks[3] || null);
       } catch (error) {
@@ -22,17 +29,8 @@ const FeaturedBooks = () => {
         setLoading(false);
       }
     };
-
     fetchBooks();
   }, []);
-
-  if (loading) {
-    return <p className="text-center py-16">Loading books...</p>;
-  }
-
-  if (books.length === 0) {
-    return <p className="text-center py-16">No books found.</p>;
-  }
 
   return (
     <section className="py-16">
@@ -47,28 +45,29 @@ const FeaturedBooks = () => {
             Because Adam liked these:
           </p>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-55 ml-30 justify-items-center">
-            {books.map((book) => (
-              <div
-                key={book.id}
-                className="flex flex-col items-center border border-gray-500 rounded-lg p-4 transform transition duration-200 hover:scale-105 w-60 h-60"
-              >
-                <div className="w-24 h-36 bg-gray-300 rounded mb-2 flex-shrink-0">
-                  {book.coverImage ? (
-                    <img
-                      src={book.coverImage}
-                      alt={book.title}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : null}
-                </div>
-                <p className="font-semibold text-center text-sm line-clamp-2">
-                  {book.title}
-                </p>
-                <p className="text-xs text-gray-500 text-center line-clamp-1">
-                  {book.authors}
-                </p>
-              </div>
-            ))}
+            {loading
+? [1, 2, 3].map((i) => <SkeletonCard key={i} />): books.map((book) => (
+                  <div
+                    key={book.id}
+                    className="flex flex-col items-center border border-gray-500 rounded-lg p-4 transform transition duration-200 hover:scale-105 w-60 h-60 opacity-0 animate-fadeIn"
+                  >
+                    <div className="w-24 h-36 bg-gray-300 rounded mb-2 flex-shrink-0">
+                      {book.coverImage && (
+                        <img
+                          src={book.coverImage}
+                          alt={book.title}
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                    </div>
+                    <p className="font-semibold text-center text-sm line-clamp-2">
+                      {book.title}
+                    </p>
+                    <p className="text-xs text-gray-500 text-center line-clamp-1">
+                      {book.authors}
+                    </p>
+                  </div>
+                ))}
           </div>
         </div>
 
@@ -77,16 +76,18 @@ const FeaturedBooks = () => {
           <p className="mb-4 text-lg font-medium text-center">
             He got recommended this:
           </p>
-          {recommended ? (
-            <div className="flex flex-col items-center border border-gray-500 rounded-lg p-4 transform transition duration-200 hover:scale-105 w-60 h-60">
+          {loading ? (
+            <SkeletonCard />
+          ) : recommended ? (
+            <div className="flex flex-col items-center border border-gray-500 rounded-lg p-4 transform transition duration-200 hover:scale-105 w-60 h-60 opacity-0 animate-fadeIn">
               <div className="w-24 h-36 bg-gray-300 rounded mb-2 flex-shrink-0">
-                {recommended.coverImage ? (
+                {recommended.coverImage && (
                   <img
                     src={recommended.coverImage}
                     alt={recommended.title}
                     className="w-full h-full object-cover"
                   />
-                ) : null}
+                )}
               </div>
               <p className="font-semibold text-center text-sm line-clamp-2">
                 {recommended.title}
@@ -96,7 +97,7 @@ const FeaturedBooks = () => {
               </p>
             </div>
           ) : (
-            <p>Loading recommended book...</p>
+            <p>No recommendation found.</p>
           )}
         </div>
       </div>
