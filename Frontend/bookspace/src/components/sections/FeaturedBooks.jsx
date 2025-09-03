@@ -49,7 +49,7 @@ const FeaturedBooks = () => {
 ? [1, 2, 3].map((i) => <SkeletonCard key={i} />): books.map((book) => (
                   <div
                     key={book.id}
-                    className="flex flex-col items-center border border-gray-500 rounded-lg p-4 transform transition duration-200 hover:scale-105 w-60 h-60 opacity-0 animate-fadeIn"
+                    className="flex flex-col items-center shadow-md rounded-lg p-4 transform transition duration-200 hover:scale-105 w-60 h-60 opacity-0 animate-fadeIn"
                   >
                     <div className="w-24 h-36 bg-gray-300 rounded mb-2 flex-shrink-0">
                       {book.coverImage && (
@@ -79,7 +79,7 @@ const FeaturedBooks = () => {
           {loading ? (
             <SkeletonCard />
           ) : recommended ? (
-            <div className="flex flex-col items-center border border-gray-500 rounded-lg p-4 transform transition duration-200 hover:scale-105 w-60 h-60 opacity-0 animate-fadeIn">
+            <div className="flex flex-col items-center shadow-md rounded-lg p-4 transform transition duration-200 hover:scale-105 w-60 h-60 opacity-0 animate-fadeIn">
               <div className="w-24 h-36 bg-gray-300 rounded mb-2 flex-shrink-0">
                 {recommended.coverImage && (
                   <img
