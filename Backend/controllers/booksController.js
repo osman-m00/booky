@@ -1,5 +1,5 @@
 const { getOrCreateUser } = require('../services/usersServices');
-const { ensureBookInDb, getBookById, getBooksCursor, getBooksOffset, searchEnglishBooksWithPopularity } = require('../services/booksService');
+const { ensureBookInDb, getBookById, getBooksCursor,searchBooksFromApi, getBooksOffset, searchEnglishBooksWithPopularity, getBooksWithAdvancedFilters  } = require('../services/booksService');
 
 // Helper: Get internal user from Clerk
 async function getInternalUser(req) {
@@ -148,9 +148,43 @@ const getFeaturedBooks = async (req, res) => {
   }
 };
 
+const searchBooksAdvanced = async (req, res) => {
+  try {
+    const { title, author, genres, isbn, publishedDate, page = 1, limit = 10 } = req.query;
+
+    const filters = {
+      title,
+      author,
+      isbn,
+      publishedDate,
+      page: Number(page),
+      limit: Number(limit),
+      genres: genres ? genres.split(',') : []
+    };
+
+    const result = await getBooksWithAdvancedFilters(filters);
+
+    res.status(200).json({
+      data: result.books,
+      pagination: {
+        page: result.page,
+        limit: result.limit || filters.limit,
+        total: result.total,
+        totalPages: result.totalPages
+      }
+    });
+  } catch (error) {
+    console.error('Advanced search error:', error);
+    res.status(500).json({
+      error: 'internal_server_error',
+      message: error.message
+    });
+  }
+};
 
 module.exports = {
   searchBooks,
   getBookDetails,
-  getFeaturedBooks
+  getFeaturedBooks,
+  searchBooksAdvanced
 };

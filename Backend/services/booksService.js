@@ -206,7 +206,64 @@ const searchEnglishBooksWithPopularity = async (subject, limit = 8) => {
   }
 };
 
+const getBooksWithAdvancedFilters = async ({
+  title,
+  author,
+  genres,
+  isbn,
+  publishedDate,
+  page = 1,
+  limit = 10
+}) => {
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
 
+  let query = supabasePublic
+    .from('books')
+    .select('*', { count: 'exact' })
+    .range(from, to);
+
+  // Build filters dynamically
+  if (title) query = query.ilike('title', `%${title}%`);
+  if (author) query = query.ilike('author', `%${author}%`);
+  if (isbn) query = query.eq('isbn', isbn);
+  if (publishedDate) query = query.eq('published_date', publishedDate);
+
+  if (genres && Array.isArray(genres) && genres.length > 0) {
+    query = query.contains('genres', genres);
+  }
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+
+  // If no results in DB → fallback to Google
+  if (!data || data.length === 0) {
+    const apiBooks = await searchBooksFromApi(
+      title || author || genres?.[0] || isbn || 'books'
+    );
+
+    // Save them into DB
+    const insertedBooks = [];
+    for (const book of apiBooks) {
+      const inserted = await ensureBookInDb(book.id);
+      insertedBooks.push(inserted);
+    }
+
+    return {
+      books: insertedBooks,
+      total: insertedBooks.length,
+      page: 1,
+      totalPages: 1
+    };
+  }
+
+  return {
+    books: data,
+    total: count,
+    page,
+    totalPages: Math.ceil(count / limit)
+  };
+};
 
 // ------------------------------
 // Exports
@@ -217,5 +274,6 @@ module.exports = {
   ensureBookInDb,
   getBooksOffset,
   getBooksCursor,
-  searchEnglishBooksWithPopularity
+  searchEnglishBooksWithPopularity,
+  getBooksWithAdvancedFilters
 };
