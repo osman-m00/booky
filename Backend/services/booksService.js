@@ -265,6 +265,68 @@ const getBooksWithAdvancedFilters = async ({
   };
 };
 
+const getBooksWithAdvancedFiltersCursor = async ({
+  title,
+  author,
+  genres,
+  isbn,
+  publishedDate,
+  limit = 10,
+  cursor = null,
+  direction = 'next' // 'next' or 'prev'
+}) => {
+  let query = supabasePublic
+    .from('books')
+    .select('*')
+    .order('created_at', { ascending: direction === 'prev' })
+    .limit(limit);
+
+  // Apply filters
+  if (title) query = query.ilike('title', `%${title}%`);
+  if (author) query = query.ilike('author', `%${author}%`);
+  if (isbn) query = query.eq('isbn', isbn);
+  if (publishedDate) query = query.eq('published_date', publishedDate);
+  if (genres && Array.isArray(genres) && genres.length > 0) {
+    query = query.contains('genres', genres);
+  }
+
+  // Handle cursor
+  if (cursor) {
+    const decodedCursor = decodeCursor(cursor);
+    query = direction === 'next'
+      ? query.lt('created_at', decodedCursor)
+      : query.gt('created_at', decodedCursor);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  // If no results in DB → fallback to Google API
+  if (!data || data.length === 0) {
+    const fallbackQuery = title || author || genres?.[0] || isbn || 'books';
+    const apiBooks = await searchBooksFromApi(fallbackQuery);
+
+    const insertedBooks = [];
+    for (const book of apiBooks) {
+      const inserted = await ensureBookInDb(book.id);
+      insertedBooks.push(inserted);
+    }
+
+    return {
+      books: insertedBooks,
+      nextCursor: null,
+      prevCursor: null
+    };
+  }
+
+  // Generate nextCursor/prevCursor
+  return {
+    books: data,
+    nextCursor: data.length > 0 ? encodeCursor(data[data.length - 1].created_at) : null,
+    prevCursor: data.length > 0 ? encodeCursor(data[0].created_at) : null
+  };
+};
+
 // ------------------------------
 // Exports
 // ------------------------------
@@ -275,5 +337,6 @@ module.exports = {
   getBooksOffset,
   getBooksCursor,
   searchEnglishBooksWithPopularity,
-  getBooksWithAdvancedFilters
+  getBooksWithAdvancedFilters,
+  getBooksWithAdvancedFiltersCursor
 };

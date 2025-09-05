@@ -1,5 +1,5 @@
 const { getOrCreateUser } = require('../services/usersServices');
-const { ensureBookInDb, getBookById, getBooksCursor,searchBooksFromApi, getBooksOffset, searchEnglishBooksWithPopularity, getBooksWithAdvancedFilters  } = require('../services/booksService');
+const { ensureBookInDb, getBookById, getBooksCursor,searchBooksFromApi, getBooksOffset, searchEnglishBooksWithPopularity, getBooksWithAdvancedFilters, getBooksWithAdvancedFiltersCursor  } = require('../services/booksService');
 
 // Helper: Get internal user from Clerk
 async function getInternalUser(req) {
@@ -148,29 +148,44 @@ const getFeaturedBooks = async (req, res) => {
   }
 };
 
+
+// ----------------------------
+// Advanced search (cursor-based)
+// ----------------------------
 const searchBooksAdvanced = async (req, res) => {
   try {
-    const { title, author, genres, isbn, publishedDate, page = 1, limit = 10 } = req.query;
+    const {
+      title,
+      author,
+      genres,
+      isbn,
+      publishedDate,
+      limit = 10,
+      cursor,
+      direction = 'next'
+    } = req.query;
 
     const filters = {
       title,
       author,
       isbn,
       publishedDate,
-      page: Number(page),
+      genres: genres ? genres.split(',') : [],
       limit: Number(limit),
-      genres: genres ? genres.split(',') : []
+      cursor,
+      direction
     };
 
-    const result = await getBooksWithAdvancedFilters(filters);
+    const result = await getBooksWithAdvancedFiltersCursor(filters);
 
     res.status(200).json({
       data: result.books,
       pagination: {
-        page: result.page,
-        limit: result.limit || filters.limit,
-        total: result.total,
-        totalPages: result.totalPages
+        limit: Number(limit),
+        hasNext: !!result.nextCursor,
+        hasPrev: !!result.prevCursor,
+        nextCursor: result.nextCursor,
+        prevCursor: result.prevCursor
       }
     });
   } catch (error) {
@@ -181,6 +196,7 @@ const searchBooksAdvanced = async (req, res) => {
     });
   }
 };
+
 
 module.exports = {
   searchBooks,

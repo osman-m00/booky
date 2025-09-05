@@ -2,51 +2,48 @@ import { useState, useCallback } from "react";
 import BookCard from "./BookCard";
 import useInfiniteScroll from "../../../hooks/useInfiniteScroll";
 import useCursorPagination from "../../../hooks/useCursorPagination";
-import { searchBooks, searchBooksAdvanced } from "../../../api/books";
+import {
+  searchBooks,
+  searchBooksAdvanced,
+  searchBooksAdvancedNext
+} from "../../../api/books";
+
+const allGenres = ["Fiction", "Non-fiction", "Fantasy", "Science", "Biography", "History"];
 
 const BooksListPage = () => {
-  const [query, setQuery] = useState(""); // search text
+  const [query, setQuery] = useState("");
   const [filters, setFilters] = useState({ author: "", genres: [], publishedDate: "", isbn: "" });
   const [isAdvanced, setIsAdvanced] = useState(false);
+  const [lastParams, setLastParams] = useState(null); // store params for loadMore
 
-  // Wrap fetch function to handle both basic and advanced searches
-  const fetchFunction = useCallback(
+  // Unified fetch function
+  const fetchBooks = useCallback(
     (params) => {
       if (isAdvanced) {
-        return searchBooksAdvanced({
-          title: params.title || "",
-          author: params.author || "",
-          genres: params.genres || [],
-          isbn: params.isbn || "",
-          publishedDate: params.publishedDate || "",
-          limit: params.limit,
-          page: params.page || 1,
-        });
+        return params.cursor
+          ? searchBooksAdvancedNext({ ...params }) // cursor-based
+          : searchBooksAdvanced({ ...params }); // initial load
       } else {
-        return searchBooks({
-          query: params.query || "",
-          limit: params.limit,
-          cursor: params.cursor,
-        });
+        return searchBooks({ ...params }); // basic search
       }
     },
     [isAdvanced]
   );
 
-  const { books, loading, hasNext, loadInitial, loadMore, error } = useCursorPagination(fetchFunction, { limit: 12 });
-
-  // Infinite scroll
+  const { books, loading, hasNext, loadInitial, loadMore, error } = useCursorPagination(fetchBooks);
   const sentinelRef = useInfiniteScroll(() => {
-    if (hasNext && !loading) loadMore();
+    if (hasNext && !loading && lastParams) loadMore(lastParams);
   });
 
-  // Handlers
   const handleSearchSubmit = useCallback(
     (e) => {
       e.preventDefault();
-      if (query.trim().length < 2) return;
+      if (!query || query.trim().length < 2) return;
+
       setIsAdvanced(false);
-      loadInitial({ query, limit: 12 });
+      const params = { query, limit: 12 };
+      setLastParams(params);
+      loadInitial(params);
     },
     [query, loadInitial]
   );
@@ -55,72 +52,80 @@ const BooksListPage = () => {
     (e) => {
       e.preventDefault();
       setIsAdvanced(true);
-      loadInitial({ ...filters, title: query, limit: 12 });
+
+      const params = { ...filters, title: query, limit: 12 };
+      setLastParams(params);
+      loadInitial(params);
     },
     [filters, query, loadInitial]
   );
 
+  const toggleGenre = (genre) => {
+    setFilters((prev) => {
+      const newGenres = prev.genres.includes(genre)
+        ? prev.genres.filter((g) => g !== genre)
+        : [...prev.genres, genre];
+      return { ...prev, genres: newGenres };
+    });
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-6">
-      {/* Basic search */}
       <form onSubmit={handleSearchSubmit} className="mb-4 flex gap-2">
         <input
-          className="border rounded px-3 py-2 w-full"
           placeholder="Search by title..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          className="border rounded px-3 py-2 w-full"
         />
         <button className="px-4 py-2 rounded bg-black text-white">Search</button>
       </form>
 
-      {/* Advanced filters */}
       <form onSubmit={handleFilterSubmit} className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-2">
         <input
           placeholder="Author"
-          className="border rounded px-3 py-2"
           value={filters.author}
           onChange={(e) => setFilters((prev) => ({ ...prev, author: e.target.value }))}
-        />
-        <input
-          placeholder="Genres (comma separated)"
           className="border rounded px-3 py-2"
-          value={filters.genres.join(",")}
-          onChange={(e) =>
-            setFilters((prev) => ({ ...prev, genres: e.target.value.split(",").map((g) => g.trim()) }))
-          }
         />
+        <div className="flex flex-wrap gap-2 col-span-1 md:col-span-1">
+          {allGenres.map((genre) => (
+            <label key={genre} className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={filters.genres.includes(genre)}
+                onChange={() => toggleGenre(genre)}
+              />
+              {genre}
+            </label>
+          ))}
+        </div>
         <input
           type="date"
           placeholder="Published Date"
-          className="border rounded px-3 py-2"
           value={filters.publishedDate}
           onChange={(e) => setFilters((prev) => ({ ...prev, publishedDate: e.target.value }))}
+          className="border rounded px-3 py-2"
         />
         <input
           placeholder="ISBN"
-          className="border rounded px-3 py-2"
           value={filters.isbn}
           onChange={(e) => setFilters((prev) => ({ ...prev, isbn: e.target.value }))}
+          className="border rounded px-3 py-2"
         />
-        <button className="px-4 py-2 rounded bg-blue-600 text-white col-span-1 md:col-span-1">
-          Apply Filters
-        </button>
+        <button className="px-4 py-2 rounded bg-blue-600 text-white col-span-1 md:col-span-1">Apply Filters</button>
       </form>
 
-      {/* Error */}
       {error && <div className="text-red-600 mb-4">Failed to load books.</div>}
 
-      {/* Book grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {books.map((book) => (
           <BookCard key={book.id} book={book} />
         ))}
       </div>
 
-      {/* Loading */}
       {loading && <div className="py-4 text-center">Loading…</div>}
 
-      {/* Infinite scroll sentinel */}
       <div ref={sentinelRef} className="h-6" />
     </div>
   );

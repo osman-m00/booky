@@ -9,6 +9,8 @@ export default function useCursorPagination(fetchFunction) {
 
   // Load first page
   const loadInitial = useCallback(async (params) => {
+    if (!params) return; // skip if no params
+
     setLoading(true);
     setError(null);
     setCursor(null);
@@ -18,7 +20,7 @@ export default function useCursorPagination(fetchFunction) {
       const res = await fetchFunction(params);
       setBooks(res.data.data || []);
       setCursor(res.data.pagination?.nextCursor || null);
-      setHasNext(res.data.pagination?.hasNext || false);
+      setHasNext(!!res.data.pagination?.hasNext);
     } catch (err) {
       setError(err);
     } finally {
@@ -29,6 +31,7 @@ export default function useCursorPagination(fetchFunction) {
   // Load next page
   const loadMore = useCallback(async (params) => {
     if (!hasNext || loading) return;
+    if (!params) return; // skip if no search params
 
     setLoading(true);
     setError(null);
@@ -37,7 +40,7 @@ export default function useCursorPagination(fetchFunction) {
       const res = await fetchFunction({ ...params, cursor });
       setBooks(prev => [...prev, ...(res.data.data || [])]);
       setCursor(res.data.pagination?.nextCursor || null);
-      setHasNext(res.data.pagination?.hasNext || false);
+      setHasNext(!!res.data.pagination?.hasNext);
     } catch (err) {
       setError(err);
     } finally {
