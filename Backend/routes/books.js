@@ -4,10 +4,12 @@ const {
   searchBooks,
   getBookDetails,
   getFeaturedBooks,
-  searchBooksAdvanced
+  searchBooksAdvanced,
+  listBooksController
 } = require('../controllers/booksController');
 
 // Public routes
+router.get('/list', listBooksController);
 router.get('/featured', getFeaturedBooks);
 router.get('/search', searchBooks);
 router.get('/search/advanced', searchBooksAdvanced);
@@ -32,5 +34,8 @@ router.get('/search/advanced/prev', (req, res) => {
   req.query.direction = 'prev';
   searchBooksAdvanced(req, res);
 });
+
+router.get('/list', listBooksController);
+
 
 module.exports = router;

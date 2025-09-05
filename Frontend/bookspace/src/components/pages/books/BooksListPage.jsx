@@ -1,132 +1,175 @@
-import { useState, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { listBooks } from "../../../api/books";
 import BookCard from "./BookCard";
-import useInfiniteScroll from "../../../hooks/useInfiniteScroll";
-import useCursorPagination from "../../../hooks/useCursorPagination";
-import {
-  searchBooks,
-  searchBooksAdvanced,
-  searchBooksAdvancedNext
-} from "../../../api/books";
 
-const allGenres = ["Fiction", "Non-fiction", "Fantasy", "Science", "Biography", "History"];
+const LIMIT = 10;
 
 const BooksListPage = () => {
-  const [query, setQuery] = useState("");
-  const [filters, setFilters] = useState({ author: "", genres: [], publishedDate: "", isbn: "" });
-  const [isAdvanced, setIsAdvanced] = useState(false);
-  const [lastParams, setLastParams] = useState(null); // store params for loadMore
-
-  // Unified fetch function
-  const fetchBooks = useCallback(
-    (params) => {
-      if (isAdvanced) {
-        return params.cursor
-          ? searchBooksAdvancedNext({ ...params }) // cursor-based
-          : searchBooksAdvanced({ ...params }); // initial load
-      } else {
-        return searchBooks({ ...params }); // basic search
-      }
-    },
-    [isAdvanced]
-  );
-
-  const { books, loading, hasNext, loadInitial, loadMore, error } = useCursorPagination(fetchBooks);
-  const sentinelRef = useInfiniteScroll(() => {
-    if (hasNext && !loading && lastParams) loadMore(lastParams);
+  const [books, setBooks] = useState([]);
+  const [filters, setFilters] = useState({
+    query: "fiction",
+    author: "",
+    isbn: "",
+    genre: ""
   });
+  const [startIndex, setStartIndex] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(false);
 
-  const handleSearchSubmit = useCallback(
-    (e) => {
-      e.preventDefault();
-      if (!query || query.trim().length < 2) return;
+  const sentinelRef = useRef(null);
+  const observerRef = useRef(null);
+  // synchronous flag to prevent overlapping fetches
+  const isFetchingRef = useRef(false);
 
-      setIsAdvanced(false);
-      const params = { query, limit: 12 };
-      setLastParams(params);
-      loadInitial(params);
-    },
-    [query, loadInitial]
-  );
+  // fetchBooks - memoized so useEffect/observer deps are stable
+  const fetchBooks = useCallback(async () => {
+    // synchronous guard
+    if (!hasMore || isFetchingRef.current) return;
 
-  const handleFilterSubmit = useCallback(
-    (e) => {
-      e.preventDefault();
-      setIsAdvanced(true);
+    isFetchingRef.current = true; // set immediately
+    setLoading(true);
 
-      const params = { ...filters, title: query, limit: 12 };
-      setLastParams(params);
-      loadInitial(params);
-    },
-    [filters, query, loadInitial]
-  );
+    try {
+      const res = await listBooks({
+        query: filters.query,
+        author: filters.author,
+        isbn: filters.isbn,
+        genre: filters.genre,
+        limit: LIMIT,
+        startIndex
+      });
 
-  const toggleGenre = (genre) => {
-    setFilters((prev) => {
-      const newGenres = prev.genres.includes(genre)
-        ? prev.genres.filter((g) => g !== genre)
-        : [...prev.genres, genre];
-      return { ...prev, genres: newGenres };
-    });
+      // support different response shapes: { books: [...], nextStartIndex, hasMore }
+      // or { data: [...] } or { data: { data: [...] } } depending on your backend
+      const maybeBooks =
+        Array.isArray(res?.data?.books)
+          ? res.data.books
+          : Array.isArray(res?.data?.data)
+          ? res.data.data
+          : Array.isArray(res?.data)
+          ? res.data
+          : [];
+
+      // Append or replace if startIndex === 0
+      setBooks(prev => (startIndex === 0 ? maybeBooks : [...prev, ...maybeBooks]));
+
+      // Determine nextStartIndex
+      const nextStartFromRes =
+        res?.data?.nextStartIndex ?? (startIndex + maybeBooks.length);
+
+      // Determine hasMore
+      const hasMoreFromRes =
+        typeof res?.data?.hasMore === "boolean"
+          ? res.data.hasMore
+          : maybeBooks.length === LIMIT; // if returned exactly LIMIT, there might be more
+
+      setStartIndex(nextStartFromRes);
+      setHasMore(hasMoreFromRes);
+    } catch (err) {
+      console.error("Error fetching books:", err);
+      // optionally setHasMore(false) on certain errors if you want to stop attempts
+    } finally {
+      setLoading(false);
+      isFetchingRef.current = false;
+    }
+  }, [filters, startIndex, hasMore]);
+
+  // IntersectionObserver for infinite scroll
+  useEffect(() => {
+    const currentSentinel = sentinelRef.current;
+    if (!currentSentinel) return;
+
+    const observer = new IntersectionObserver(
+      entries => {
+        const ent = entries[0];
+        if (ent && ent.isIntersecting && !isFetchingRef.current && hasMore && !loading) {
+          fetchBooks();
+        }
+      },
+      { threshold: 1 }
+    );
+
+    observer.observe(currentSentinel);
+    observerRef.current = observer;
+
+    return () => {
+      if (observerRef.current && currentSentinel) {
+        observerRef.current.unobserve(currentSentinel);
+      }
+    };
+  }, [fetchBooks, hasMore, loading]); // fetchBooks is stable via useCallback
+
+  // When filters change -> reset pagination and fetch first page
+  useEffect(() => {
+    setBooks([]);
+    setStartIndex(0);
+    setHasMore(true);
+
+    // trigger first fetch for the new filters
+    // small microtask delay helps avoid race with observer in some edge cases,
+    // but isFetchingRef prevents duplicates anyway.
+    fetchBooks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]); // we purposely don't include fetchBooks in deps to avoid double-call loops; using fetchBooks directly here is OK
+
+  const handleSearch = e => {
+    e.preventDefault();
+
+    const formFilters = {
+      query: e.target.query.value.trim(),
+      author: e.target.author.value.trim(),
+      isbn: e.target.isbn.value.trim(),
+      genre: e.target.genre.value.trim()
+    };
+
+    if (
+      !formFilters.query &&
+      !formFilters.author &&
+      !formFilters.isbn &&
+      !formFilters.genre
+    ) {
+      // no-op if user submitted empty search
+      return;
+    }
+
+    setFilters(formFilters);
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6">
-      <form onSubmit={handleSearchSubmit} className="mb-4 flex gap-2">
-        <input
-          placeholder="Search by title..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="border rounded px-3 py-2 w-full"
-        />
-        <button className="px-4 py-2 rounded bg-black text-white">Search</button>
+    <div>
+      <h1>Books List</h1>
+
+      {/* Search form */}
+      <form onSubmit={handleSearch} style={{ marginBottom: "20px" }}>
+        <input type="text" name="query" placeholder="Search books..." />
+        <input type="text" name="author" placeholder="Author" />
+        <input type="text" name="isbn" placeholder="ISBN" />
+        <input type="text" name="genre" placeholder="Genre" />
+        <button type="submit">Search</button>
       </form>
 
-      <form onSubmit={handleFilterSubmit} className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-2">
-        <input
-          placeholder="Author"
-          value={filters.author}
-          onChange={(e) => setFilters((prev) => ({ ...prev, author: e.target.value }))}
-          className="border rounded px-3 py-2"
-        />
-        <div className="flex flex-wrap gap-2 col-span-1 md:col-span-1">
-          {allGenres.map((genre) => (
-            <label key={genre} className="flex items-center gap-1">
-              <input
-                type="checkbox"
-                checked={filters.genres.includes(genre)}
-                onChange={() => toggleGenre(genre)}
-              />
-              {genre}
-            </label>
-          ))}
-        </div>
-        <input
-          type="date"
-          placeholder="Published Date"
-          value={filters.publishedDate}
-          onChange={(e) => setFilters((prev) => ({ ...prev, publishedDate: e.target.value }))}
-          className="border rounded px-3 py-2"
-        />
-        <input
-          placeholder="ISBN"
-          value={filters.isbn}
-          onChange={(e) => setFilters((prev) => ({ ...prev, isbn: e.target.value }))}
-          className="border rounded px-3 py-2"
-        />
-        <button className="px-4 py-2 rounded bg-blue-600 text-white col-span-1 md:col-span-1">Apply Filters</button>
-      </form>
-
-      {error && <div className="text-red-600 mb-4">Failed to load books.</div>}
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {books.map((book) => (
+      {/* Books grid */}
+      <div
+        className="books-grid"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+          gap: "20px"
+        }}
+      >
+        {books.map(book => (
           <BookCard key={book.id} book={book} />
         ))}
       </div>
 
-      {loading && <div className="py-4 text-center">Loading…</div>}
+      {/* Sentinel div */}
+      {hasMore && <div ref={sentinelRef} style={{ height: "20px" }}></div>}
 
-      <div ref={sentinelRef} className="h-6" />
+      {/* Loading indicator */}
+      {loading && <p>Loading...</p>}
+
+      {/* Optional: no more results */}
+      {!hasMore && books.length > 0 && <p>No more books to load.</p>}
     </div>
   );
 };

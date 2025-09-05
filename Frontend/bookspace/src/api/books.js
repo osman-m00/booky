@@ -37,3 +37,35 @@ export const searchBooksAdvancedPrev = ({ title, author, genres = [], isbn, publ
     params: { title, author, genres: genresParam, isbn, publishedDate, limit, cursor }
   });
 };
+
+// Advanced search with page-based pagination (offset)
+export const searchBooksAdvancedByPage = ({
+  title,
+  author,
+  genres = [],
+  isbn,
+  publishedDate,
+  limit = 10,
+  page = 1
+}) => {
+  const genresParam = Array.isArray(genres) ? genres.join(',') : genres;
+
+  return api.get('/books/search/advanced', {
+    params: { 
+      title, 
+      author, 
+      genres: genresParam, 
+      isbn, 
+      publishedDate, 
+      limit, 
+      page // pass page number instead of cursor
+    }
+  });
+};
+
+
+export const listBooks = ({ query = '', author = '', isbn = '', genre = '', limit = 10, startIndex = 0 }) => {
+  return api.get('/books/list', {
+    params: { query, author, isbn, genre, limit, startIndex }
+  });
+};

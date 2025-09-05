@@ -1,5 +1,14 @@
 const { getOrCreateUser } = require('../services/usersServices');
-const { ensureBookInDb, getBookById, getBooksCursor,searchBooksFromApi, getBooksOffset, searchEnglishBooksWithPopularity, getBooksWithAdvancedFilters, getBooksWithAdvancedFiltersCursor  } = require('../services/booksService');
+const { 
+  ensureBookInDb, 
+  getBookById, 
+  getBooksCursor,
+  searchBooksFromApi, 
+  getBooksOffset, 
+  searchEnglishBooksWithPopularity, 
+  getBooksWithAdvancedFiltersCursor,
+  fetchBooksFromApiIncremental
+} = require('../services/booksService');
 
 // Helper: Get internal user from Clerk
 async function getInternalUser(req) {
@@ -58,9 +67,8 @@ const searchBooks = async (req, res) => {
 
     // 2️⃣ If no books in DB, fallback to Google API
     if (!result.books || result.books.length === 0) {
-      const apiBooks = await searchBooksFromApi(query);
+      const apiBooks = await searchBooksFromApi(query, Number(limit)); // <-- pass limit here
 
-      // Optional: insert fetched books into DB
       const insertedBooks = [];
       for (const book of apiBooks) {
         const inserted = await ensureBookInDb(book.id);
@@ -91,14 +99,12 @@ const searchBooks = async (req, res) => {
   }
 };
 
-
 // ----------------------------
 // Get Book Details (Optional Auth)
 // ----------------------------
 const getBookDetails = async (req, res) => {
   try {
     await getInternalUser(req); // optional authentication
-
     const id = req.params.id;
 
     if (!id || id.trim().length < 2) {
@@ -131,6 +137,9 @@ const getBookDetails = async (req, res) => {
   }
 };
 
+// ----------------------------
+// Featured Books
+// ----------------------------
 const getFeaturedBooks = async (req, res) => {
   try {
     const query = req.query.query || 'fiction';
@@ -147,7 +156,6 @@ const getFeaturedBooks = async (req, res) => {
     });
   }
 };
-
 
 // ----------------------------
 // Advanced search (cursor-based)
@@ -198,9 +206,51 @@ const searchBooksAdvanced = async (req, res) => {
 };
 
 
+const listBooksController = async (req, res) => {
+  try {
+    const {
+      query = '',
+      author = '',
+      isbn = '',
+      genre = '',
+      limit = 10,
+      startIndex = 0
+    } = req.query;
+
+    // Validate at least one search/filter
+    if (!query && !author && !isbn && !genre) {
+      return res.status(400).json({
+        error: 'invalid_query',
+        message: 'Please provide at least one search term or filter'
+      });
+    }
+
+    const result = await fetchBooksFromApiIncremental({
+      query,
+      author,
+      isbn,
+      genre,
+      limit: Number(limit),
+      startIndex: Number(startIndex)
+    });
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('List books error:', error);
+    res.status(500).json({
+      error: 'internal_server_error',
+      message: error.message
+    });
+  }
+};
+
+
+
+
 module.exports = {
   searchBooks,
   getBookDetails,
   getFeaturedBooks,
-  searchBooksAdvanced
+  searchBooksAdvanced,
+  listBooksController
 };
