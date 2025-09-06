@@ -135,38 +135,57 @@ const BooksListPage = () => {
     setFilters(formFilters);
   };
 
+  const SkeletonCard = () => (
+ <div className=" rounded-lg transform shadow-md hover:scale-102 duration-800 transition p-4 w-80 animate-pulse">
+      {/* Cover image */}
+      <div className="w-full h-48 object-cover rounded mb-3 border border-gray-400 bg-gray-400"/>
+
+      {/* Title */}
+      <h3 className="font-semibold text-lg mb-1"></h3>
+
+      {/* Author */}
+      <p className="text-gray-600 text-sm mb-1"></p>
+
+      {/* Published date and page count */}
+      <p className="text-gray-500 text-sm mb-1">
+        
+      </p>
+
+      {/* Genres */}
+        <p className="text-gray-500 text-sm mb-2"></p>
+    
+
+      {/* Optional description tooltip */}
+        <p className="text-gray-700 text-sm truncate">
+        </p>
+    </div>
+);
   return (
     <div>
-      <h1>Books List</h1>
-
       {/* Search form */}
-      <form onSubmit={handleSearch} style={{ marginBottom: "20px" }}>
-        <input type="text" name="query" placeholder="Search books..." />
-        <input type="text" name="author" placeholder="Author" />
-        <input type="text" name="isbn" placeholder="ISBN" />
-        <input type="text" name="genre" placeholder="Genre" />
-        <button type="submit">Search</button>
+      <h1 className="font-bold text-3xl text-center mb-10 mt-10">Search For Your Next Favorite Book</h1>
+      <div className="flex flex-row justify-center">
+      <form onSubmit={handleSearch} className="w-sm shadow-lg flex flex-col mb-20  rounded-lg">
+        <input type="text" name="query" placeholder="Name" className="p-2"/>
+        <input type="text" name="author" placeholder="Author" className="p-2"/>
+        <input type="text" name="isbn" placeholder="ISBN" className="p-2"/>
+        <input type="text" name="genre" placeholder="Genre" className="p-2"/>
+        <div className="flex flex-row justify-center"><button type="submit" className="w-20 rounded-lg shadow-md transform transition hover:scale-105 mb-3 mt-3">Search</button></div>
       </form>
+      </div>
 
       {/* Books grid */}
-      <div
-        className="books-grid"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-          gap: "20px"
-        }}
-      >
-        {books.map(book => (
-          <BookCard key={book.id} book={book} />
-        ))}
+      <div className="grid grid-cols-4">
+        { books
+          .filter(book => book?.coverImage) // only books that have a coverImage
+            .map(book => <BookCard key={book.id} book={book} />)}
+
+      {loading && [1,2,3,4,5,6,7,8,9].map((m)=>(<SkeletonCard key={m}/>))}
       </div>
 
       {/* Sentinel div */}
-      {hasMore && <div ref={sentinelRef} style={{ height: "20px" }}></div>}
+      {hasMore && <div ref={sentinelRef} className="h-5"></div>}
 
-      {/* Loading indicator */}
-      {loading && <p>Loading...</p>}
 
       {/* Optional: no more results */}
       {!hasMore && books.length > 0 && <p>No more books to load.</p>}

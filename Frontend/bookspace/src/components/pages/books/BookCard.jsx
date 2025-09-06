@@ -3,36 +3,36 @@ import React from "react";
 
 const BookCard = ({ book }) => {
   const {
-    cover_image_url,
+    coverImage,
     title,
-    author,
+    authors,
     genres,
-    published_date,
-    page_count,
+    publishedDate,
+    pageCount,
     description
   } = book;
 
   // Format published date nicely
-  const formattedDate = published_date ? new Date(published_date).toLocaleDateString() : "N/A";
+  const formattedDate = publishedDate ? new Date(publishedDate).toLocaleDateString() : "N/A";
 
   return (
-    <div className="border rounded shadow hover:shadow-lg transition p-4 flex flex-col">
+    <div className=" rounded-lg transform shadow-md hover:scale-102 duration-800 transition p-4 flex flex-col w-80">
       {/* Cover image */}
       <img
-        src={cover_image_url || "/placeholder-book.png"} // fallback image
+        src={coverImage || "/placeholder-book.png"} // fallback image
         alt={title}
-        className="w-full h-48 object-cover rounded mb-3"
+        className="w-full h-48 object-cover rounded mb-3 border border-gray-400"
       />
 
       {/* Title */}
       <h3 className="font-semibold text-lg mb-1">{title}</h3>
 
       {/* Author */}
-      <p className="text-gray-600 text-sm mb-1">by {author}</p>
+      <p className="text-gray-600 text-sm mb-1">by {authors}</p>
 
       {/* Published date and page count */}
       <p className="text-gray-500 text-sm mb-1">
-        Published: {formattedDate} | {page_count || "?"} pages
+        Published: {formattedDate} | {pageCount || "?"} pages
       </p>
 
       {/* Genres */}

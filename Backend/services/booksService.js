@@ -349,44 +349,63 @@ const getBooksWithAdvancedFiltersCursor = async ({
  *
  * Returns: { data: [...books], nextStartIndex, hasMore }
  */
-const fetchBooksFromApiIncremental = async ({ query, author, isbn, genre, limit = 10, startIndex = 0 }) => {
+
+const fetchBooksFromApiIncremental = async ({
+  query,
+  author,
+  isbn,
+  genre,
+  limit = 10,
+  startIndex = 0
+}) => {
   try {
-    // Build Google q string (same as before)
     const parts = [];
-    if (query && query.trim()) parts.push(query.trim());
+    const trimmedQuery = query?.trim() || '';
+    // If the user included explicit qualifiers like intitle:, keep them as-is.
+    const hasQualifier = /(?:intitle:|inauthor:|isbn:|subject:)/i.test(trimmedQuery);
+
+    // By default, search the title (intitle) for tighter, more relevant results.
+    if (trimmedQuery) {
+      parts.push(hasQualifier ? trimmedQuery : `intitle:"${trimmedQuery}"`);
+    }
     if (author && author.trim()) parts.push(`inauthor:"${author.trim()}"`);
     if (isbn && isbn.trim()) parts.push(`isbn:${isbn.trim()}`);
     if (genre && genre.trim()) parts.push(`subject:"${genre.trim()}"`);
+
     const qString = parts.length > 0 ? parts.join('+') : 'fiction';
 
     const collected = [];           // English books collected for return
-    let apiStart = Number(startIndex) || 0; // the index we pass to Google
+    let apiStart = Number(startIndex) || 0; // index we pass to Google
     let moreFromGoogle = true;
 
-    // keep fetching until we have `limit` English books or Google has no more items
+    // If you want "strict" behavior: ensure the returned books actually include the query in title or authors.
+    const strictTitleSearch = Boolean(trimmedQuery && !hasQualifier);
+    const qLower = trimmedQuery.toLowerCase();
+
     while (collected.length < limit && moreFromGoogle) {
       // Google allows maxResults up to 40 per request
-      const batch = Math.min(40, limit - collected.length || 40);
+      const batch = Math.min(40, limit - collected.length);
 
-      const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(qString)}&maxResults=${batch}&startIndex=${apiStart}&printType=books&langRestrict=en&orderBy=relevance`;
+      const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(
+        qString
+      )}&maxResults=${batch}&startIndex=${apiStart}&printType=books&langRestrict=en&orderBy=relevance`;
 
       const response = await axios.get(url);
       const items = response.data.items || [];
 
-      if (items.length === 0) {
+      if (!items.length) {
         moreFromGoogle = false;
         break;
       }
 
-      // Filter items by explicit language field === 'en'
-      // (some records may miss `language`, so we only accept explicit 'en')
+      // Keep only items with explicit language === 'en'
       const englishItems = items.filter(it => {
         const lang = it.volumeInfo?.language;
         return typeof lang === 'string' && lang.toLowerCase().startsWith('en');
       });
 
-      // Map englishItems to your book shape and push to collected
-      const mapped = englishItems.map(item => {
+      // Map to your shape
+      let mapped = englishItems.map(item => {
         const info = item.volumeInfo || {};
         const avgRating = info.averageRating || 0;
         const ratingsCount = info.ratingsCount || 0;
@@ -403,34 +422,44 @@ const fetchBooksFromApiIncremental = async ({ query, author, isbn, genre, limit 
           rating: avgRating,
           ratingsCount,
           popularity,
-          categories: info.categories || []
+          categories: info.categories || [],
+          // include snippet for debugging if you want
+          _searchSnippet: item.searchInfo?.textSnippet || ''
         };
       });
 
+      // If strictTitleSearch is set, filter mapped items to those that actually contain the query
+      if (strictTitleSearch) {
+        mapped = mapped.filter(b => {
+          const titleMatch = b.title?.toLowerCase().includes(qLower);
+          const authorMatch = b.authors?.toLowerCase().includes(qLower);
+          return titleMatch || authorMatch;
+        });
+      }
+
       collected.push(...mapped);
 
-      // advance apiStart by number of items *returned by Google*, not just englishItems,
-      // so next request continues where Google left off
+      // advance apiStart by number of items *returned by Google*
       apiStart += items.length;
 
-      // If Google returned fewer than requested batch, it's likely there is no more
+      // If Google returned fewer than requested batch, likely no more items
       if (items.length < batch) {
         moreFromGoogle = false;
         break;
       }
     }
 
-    // Trim to exactly `limit` if we collected extra
+    // Trim to exactly `limit`
     const resultBooks = collected.slice(0, limit);
 
-    // nextStartIndex should be the apiStart we've consumed from Google
     const nextStartIndex = apiStart;
-
     // hasMore: true if we returned exactly limit and Google may still have more
     const hasMore = resultBooks.length === Number(limit) && moreFromGoogle;
 
-    // Optionally sort by popularity (we already computed popularity above)
-    resultBooks.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+    // Only sort by popularity if there's no textual query (i.e. browsing mode).
+    if (!trimmedQuery) {
+      resultBooks.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+    }
 
     return {
       data: resultBooks,
@@ -442,6 +471,7 @@ const fetchBooksFromApiIncremental = async ({ query, author, isbn, genre, limit 
     throw new Error('Failed to fetch books from Google API');
   }
 };
+
 
 
 
