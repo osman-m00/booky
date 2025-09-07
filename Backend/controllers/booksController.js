@@ -105,32 +105,56 @@ const searchBooks = async (req, res) => {
 const getBookDetails = async (req, res) => {
   try {
     await getInternalUser(req); // optional authentication
-    const id = req.params.id;
 
-    if (!id || id.trim().length < 2) {
+    const id = (req.params.id || '').trim();
+    if (!id) {
       return res.status(400).json({
-        error: !id ? 'id_not_found' : 'id_too_short',
-        message: !id ? 'Book with specified ID not found' : 'ID must be at least 2 characters long'
+        error: 'id_not_found',
+        message: 'Book with specified ID not found'
+      });
+    }
+    if (id.length < 2) {
+      return res.status(400).json({
+        error: 'id_too_short',
+        message: 'ID must be at least 2 characters long'
       });
     }
 
     const book = await getBookById(id);
+    // If getBookById ever returns null/undefined instead of throwing, handle it:
+    if (!book) {
+      return res.status(404).json({
+        error: 'book_not_found',
+        message: `No book found with id: ${id}`
+      });
+    }
 
-    res.status(200).json({
+    return res.status(200).json({
       message: `Found book with id: ${id}`,
       book
     });
   } catch (error) {
-    console.error('Get book by ID error:', error);
+    console.error(`Get book by ID error for id=${req.params?.id}:`, error);
 
-    if (error.message.includes('Failed to fetch')) {
+    const msg = (error && error.message) ? error.message : '';
+
+    if (msg.includes('No book found')) {
+      return res.status(404).json({
+        error: 'book_not_found',
+        message: msg
+      });
+    }
+
+    // Matches the getBookById thrown external-service error
+    if (msg.includes('Failed to fetch')) {
       return res.status(503).json({ 
         error: 'external_service_unavailable',
         message: 'Book search service is temporarily down'
       });
     }
 
-    res.status(500).json({ 
+    // fallback
+    return res.status(500).json({ 
       error: 'internal_server_error',
       message: 'Something went wrong on our end'
     });

@@ -28,32 +28,50 @@ const searchBooksFromApi = async (query) => {
   }
 };
 
-const getBookById = async (id) => {
-  try {
-    const response = await axios.get(`https://www.googleapis.com/books/v1/volumes/${id}`);
-    const volumeInfo = response.data.volumeInfo || {};
+// Assumes axios is already imported:
+// const axios = require('axios');
 
-    const identifiers = volumeInfo.industryIdentifiers || [];
-    const isbn13 = identifiers.find(x => x.type === 'ISBN_13')?.identifier;
-    const isbn10 = identifiers.find(x => x.type === 'ISBN_10')?.identifier;
+const getBookById = async (id) => {
+  if (!id) throw new Error('Book ID is required');
+
+  try {
+    const url = `https://www.googleapis.com/books/v1/volumes/${encodeURIComponent(id)}`;
+    const response = await axios.get(url);
+    const item = response.data;
+
+    if (!item) {
+      throw new Error('No book found for the given ID');
+    }
+
+    const info = item.volumeInfo || {};
+
+    const avgRating = typeof info.averageRating === 'number' ? info.averageRating : 0;
+    const ratingsCount = typeof info.ratingsCount === 'number' ? info.ratingsCount : 0;
+    // Match popularity calculation used in incremental function:
+    const popularity = avgRating * Math.log10(ratingsCount + 1);
 
     return {
-      id: response.data.id,
-      title: volumeInfo.title,
-      authors: volumeInfo.authors?.join(', ') || 'Unknown Author',
-      description: volumeInfo.description || 'No description available',
-      coverImage: volumeInfo.imageLinks?.thumbnail || null,
-      publishedDate: volumeInfo.publishedDate,
-      pageCount: volumeInfo.pageCount,
-      rating: volumeInfo.averageRating,
-      language: volumeInfo.language,
-      categories: volumeInfo.categories || null,
-      isbn: isbn13 || isbn10 || null
+      id: item.id,
+      title: info.title,
+      authors: info.authors?.join(', ') || 'Unknown Author',
+      description: info.description || 'No description available',
+      coverImage: info.imageLinks?.thumbnail || null,
+      publishedDate: info.publishedDate,
+      pageCount: info.pageCount,
+      rating: avgRating,
+      ratingsCount,
+      popularity,
+      categories: info.categories || [],
+      // incremental included a search snippet (used for debugging/display); keep same field
+      _searchSnippet: item.searchInfo?.textSnippet || ''
     };
   } catch (error) {
+    console.error('getBookById error:', error.response?.data || error.message);
     throw new Error('Failed to fetch book with specified ID');
   }
 };
+
+
 
 // ------------------------------
 // DB Functions

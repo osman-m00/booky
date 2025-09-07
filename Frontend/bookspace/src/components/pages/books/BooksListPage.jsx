@@ -105,11 +105,8 @@ const BooksListPage = () => {
     setStartIndex(0);
     setHasMore(true);
 
-    // trigger first fetch for the new filters
-    // small microtask delay helps avoid race with observer in some edge cases,
-    // but isFetchingRef prevents duplicates anyway.
+
     fetchBooks();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]); // we purposely don't include fetchBooks in deps to avoid double-call loops; using fetchBooks directly here is OK
 
   const handleSearch = e => {
@@ -177,7 +174,7 @@ const BooksListPage = () => {
       {/* Books grid */}
       <div className="grid grid-cols-4">
         { books
-          .filter(book => book?.coverImage) // only books that have a coverImage
+          .filter(book => book?.coverImage)
             .map(book => <BookCard key={book.id} book={book} />)}
 
       {loading && [1,2,3,4,5,6,7,8,9].map((m)=>(<SkeletonCard key={m}/>))}
