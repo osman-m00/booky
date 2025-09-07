@@ -69,3 +69,7 @@ export const listBooks = ({ query = '', author = '', isbn = '', genre = '', limi
     params: { query, author, isbn, genre, limit, startIndex }
   });
 };
+
+export const bookDetails = (id) => {
+  return api.get(`/books/${id}`);
+};
