@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { bookDetails } from '../../../api/books';
+import { SignedIn, useAuth } from "@clerk/clerk-react";
+import { addToLibrary as addToLibraryApi } from '../../../api/library'; // renamed import
 
 const BookDetailsPage = () => {
   const { id } = useParams();
   const [book, setBook] = useState(null);
+  const [addedToLibrary, setAddedToLibrary] = useState(false); 
+  const { getToken, userId } = useAuth();
+
 
   const getBookDetails = async (id) => {
     try {
@@ -13,6 +18,17 @@ const BookDetailsPage = () => {
     } catch (error) {
       console.log('Failed to fetch book by id in Book Details page', error);
     }
+  };
+
+  const addToLibraryHandler = async () => {
+    if (!userId) return; // not signed in
+  try {
+    const token = await getToken(); // short-lived Clerk token
+    const res = await addToLibraryApi({bookId: id, token});
+    if (res.status === 201) setAddedToLibrary(true);
+  } catch (error) {
+      console.error('Failed to add book to library:', error);
+    } 
   };
 
   useEffect(() => {
@@ -70,6 +86,9 @@ const BookDetailsPage = () => {
         className="mt-2 leading-relaxed text-gray-800 [&_ul]:list-disc [&_ul]:ml-6 [&_li]:mb-2"
         dangerouslySetInnerHTML={{ __html: book.description }}
       />
+    <SignedIn><button className='shadow-lg w-44 h-12 rounded-lg transition transform hover:scale-103 duration-700' onClick={addToLibraryHandler}>{addedToLibrary ? 'Added to Library' : 'Add to Library'}
+</button></SignedIn>
+
     </div>
   );
 };

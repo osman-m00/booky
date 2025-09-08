@@ -1,22 +1,16 @@
 const { ensureBookInDb } = require('../services/booksService');
 const { addOrUpdate, listWithBooks, update, deleteBook } = require('../services/libraryService');
-const { getOrCreateUser } = require('../services/usersServices')
-
+const getOrCreateUser = require('../services/usersServices')
 const VALID_STATUSES = ['want_to_read', 'currently_reading', 'completed', 'abandoned'];
 
 const addToLibrary = async (req, res) => {
   try {
-    const clerkUser = {
-      id: req.user.id,
-      email: req.user.claims.email,
-      firstName: req.user.claims.first_name,
-      lastName: req.user.claims.last_name,
-      avatarUrl: req.user.claims.avatar_url,
-    };
+    // Use full user info attached by middleware
+    const clerkUser = req.user;
     const internalUser = await getOrCreateUser(clerkUser);
     const userId = internalUser.id;
 
-    const { bookId, status, rating, notes } = req.body || {};
+    const { bookId, status = null, rating = null, notes = null } = req.body || {};
 
     if (!bookId || !bookId.trim()) {
       return res.status(400).json({ error: 'missing_book_id', message: 'Book Id is required' });
@@ -29,25 +23,18 @@ const addToLibrary = async (req, res) => {
       });
     }
 
-    if (rating !== undefined) {
-      const n = Number(rating);
-      if (!Number.isInteger(n) || n < 1 || n > 5) {
-        return res.status(400).json({ error: 'invalid_rating', message: 'Rating must be 1-5 integer' });
-      }
+    if (rating !== null && (!Number.isInteger(Number(rating)) || rating < 1 || rating > 5)) {
+      return res.status(400).json({ error: 'invalid_rating', message: 'Rating must be 1-5 integer' });
     }
 
-    if (notes && typeof notes !== 'string') {
-      return res.status(400).json({ error: 'invalid_notes', message: 'Notes must be a string' });
-    }
-    if (typeof notes === 'string' && notes.length > 2000) {
-      return res.status(400).json({ error: 'notes_too_long', message: 'Notes must be <= 2000 chars' });
+    if (notes && (typeof notes !== 'string' || notes.length > 2000)) {
+      return res.status(400).json({ error: 'invalid_notes', message: 'Notes must be string <= 2000 chars' });
     }
 
     await ensureBookInDb(bookId);
-
     const libItem = await addOrUpdate(userId, { bookId, status, rating, notes });
 
-    return res.status(201).json({
+    res.status(201).json({
       ok: true,
       message: 'Book added to library successfully',
       item: libItem,
@@ -57,9 +44,11 @@ const addToLibrary = async (req, res) => {
     if (err.message.includes('Failed to fetch book with specified ID')) {
       return res.status(404).json({ error: 'book_not_found', message: 'Book not found' });
     }
-    return res.status(500).json({ error: 'internal_server_error', message: 'Something went wrong' });
+    res.status(500).json({ error: 'internal_server_error', message: 'Something went wrong' });
   }
 };
+
+
 
 const listLibrary = async (req, res) => {
   try {

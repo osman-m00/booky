@@ -1,31 +1,34 @@
-const supabase = require('../config/supabase')
+const {supabase} = require('../config/supabase')
+const { clerkClient } = require('@clerk/clerk-sdk-node');
 
 async function getOrCreateUser(clerkUser) {
   try {
-    const { id: clerkId, email, firstName, lastName, avatarUrl } = clerkUser;
+    // Fetch full user data from Clerk
+    const fullUser = await clerkClient.users.getUser(clerkUser.id);
 
-    const name = `${firstName || ''} ${lastName || ''}`.trim() || email;
+    const { emailAddresses, firstName, lastName, imageUrl } = fullUser;
 
-    // Checking if user already exists
+    const email = emailAddresses?.[0]?.emailAddress; // first email
+    const name = `${firstName || ''} ${lastName || ''}`.trim() || email || clerkUser.id;
+
+    // Check if user exists
     let { data: user, error } = await supabase
       .from('users')
       .select('*')
-      .eq('clerk_id', clerkId)
+      .eq('clerk_id', clerkUser.id)
       .single();
 
-    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
-      throw error;
-    }
-
+    if (error && error.code !== 'PGRST116') throw error;
     if (user) return user;
 
+    // Insert new user
     const { data: newUser, error: insertError } = await supabase
       .from('users')
       .insert({
-        clerk_id: clerkId,
+        clerk_id: clerkUser.id,
         email,
         name,
-        avatar_url: avatarUrl,
+        avatar_url: imageUrl,
       })
       .select('*')
       .single();
@@ -33,7 +36,6 @@ async function getOrCreateUser(clerkUser) {
     if (insertError) throw insertError;
 
     return newUser;
-
   } catch (err) {
     console.error('getOrCreateUser error:', err);
     throw err;

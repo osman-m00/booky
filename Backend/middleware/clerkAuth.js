@@ -1,39 +1,34 @@
-// Import the Clerk SDK
-const { verifyToken } = require('@clerk/clerk-sdk-node');
+const { verifyToken, clerkClient } = require('@clerk/clerk-sdk-node');
 
 async function clerkAuth(req, res, next) {
   try {
-    // 1. Get the Authorization header from the request
     const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'Authorization header missing' });
 
-    if (!authHeader) {
-      return res.status(401).json({ error: 'Authorization header missing' });
-    }
-
-    // 2. Extract the token part from "Bearer <token>"
     const token = authHeader.replace('Bearer ', '').trim();
+    if (!token) return res.status(401).json({ error: 'No token provided' });
 
-    if (!token) {
-      return res.status(401).json({ error: 'No token provided' });
-    }
-
-    // 3. Verify the token with Clerk using your secret key
+    // Verify the token (session JWT)
     const session = await verifyToken(token, {
       secretKey: process.env.CLERK_SECRET_KEY,
     });
 
-    // 4. Attach the user info from Clerk to the request object
+    // Fetch full user from Clerk
+    const user = await clerkClient.users.getUser(session.sub);
+
+    // Attach full user to request
     req.user = {
-      id: session.sub,           // Clerk user ID
-      sessionId: session.sid,    // Session ID
-      claims: session,           // All claims in the JWT
+      id: user.id,
+      email: user.emailAddresses[0]?.emailAddress || null,
+      firstName: user.firstName || null,
+      lastName: user.lastName || null,
+      avatarUrl: user.profileImageUrl || null,
     };
 
-    // 5. Pass control to the next middleware or route handler
     next();
-  } catch (error) {
-    console.error('Clerk auth error:', error);
-    return res.status(401).json({ error: 'Invalid or expired token' });
+  } catch (err) {
+    console.error('Clerk auth error:', err);
+    res.status(401).json({ error: 'Invalid or expired token' });
   }
 }
 
