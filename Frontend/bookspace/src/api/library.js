@@ -12,3 +12,22 @@ export const addToLibrary = ({ bookId, status = null, rating = null, notes = nul
     }
   );
 };
+
+export const checkBookInLibrary = ({ bookId, token }) => {
+  return api.get(
+    `/library/${bookId}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+};
+
+export const removeFromLibrary = ({ bookId, token }) => {
+  return api.delete(`/library/${bookId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+};

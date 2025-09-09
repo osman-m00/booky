@@ -1,5 +1,5 @@
 const { ensureBookInDb } = require('../services/booksService');
-const { addOrUpdate, listWithBooks, update, deleteBook } = require('../services/libraryService');
+const { addOrUpdate, listWithBooks, update, deleteBook, checkBookInLibrary} = require('../services/libraryService');
 const getOrCreateUser = require('../services/usersServices')
 const VALID_STATUSES = ['want_to_read', 'currently_reading', 'completed', 'abandoned'];
 
@@ -123,17 +123,10 @@ const updateLibraryItem = async (req, res) => {
 
 const removeFromLibrary = async (req, res) => {
   try {
-    const clerkUser = {
-      id: req.user.id,
-      email: req.user.claims.email,
-      firstName: req.user.claims.first_name,
-      lastName: req.user.claims.last_name,
-      avatarUrl: req.user.claims.avatar_url,
-    };
+    const clerkUser = req.user;
     const internalUser = await getOrCreateUser(clerkUser);
     const userId = internalUser.id;
-
-    const bookId = req.params.bookId;
+    const bookId = req.params.bookId
     if (!bookId || !bookId.trim()) {
       return res.status(400).json({ error: 'missing_book_id', message: 'Book Id required' });
     }
@@ -147,4 +140,21 @@ const removeFromLibrary = async (req, res) => {
   }
 };
 
-module.exports = { addToLibrary, listLibrary, updateLibraryItem, removeFromLibrary };
+const checkIfBookInLibrary = async (req, res) =>{
+  try{
+   const clerkUser = req.user;
+    const internalUser = await getOrCreateUser(clerkUser);
+    const userId = internalUser.id;
+    const bookId = req.params.bookId
+     if (!bookId || !bookId.trim()) {
+      return res.status(400).json({ error: 'missing_book_id', message: 'Book Id required' });
+    }
+    await checkBookInLibrary(userId, bookId);
+    return res.status(200).send();
+
+  } catch (err) {
+    console.error('Check in library error:', err);
+    return res.status(500).json({ error: 'check', message: err.message });
+  }
+}
+module.exports = { addToLibrary, listLibrary, updateLibraryItem, removeFromLibrary, checkIfBookInLibrary };

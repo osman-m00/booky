@@ -88,7 +88,9 @@ async function deleteBook(userId, bookId) {
     .from('user_library')
     .delete()
     .eq('user_id', userId)
-    .eq('book_id', bookId);
+    .eq('book_id', bookId)
+    .select();
+    
 
   if (error) {
     throw new Error(`Failed to delete library item: ${error.message}`);
@@ -102,4 +104,20 @@ async function deleteBook(userId, bookId) {
   return true; // successfully deleted
 }
 
-module.exports = { addOrUpdate, listLibrary, listWithBooks, update, deleteBook };
+
+async function checkBookInLibrary(userId, bookId) {
+  const { data, error } = await supabase
+    .from('user_library')
+    .select('book_id')
+    .eq('user_id', userId)  
+    .eq('book_id', bookId)
+    .single();
+
+  if (error || !data) {
+    throw new Error('This book is not present in the library');
+  }
+
+  return true;
+}
+
+module.exports = { addOrUpdate, listLibrary, listWithBooks, update, deleteBook, checkBookInLibrary };

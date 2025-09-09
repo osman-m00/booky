@@ -2,14 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { bookDetails } from '../../../api/books';
 import { SignedIn, useAuth } from "@clerk/clerk-react";
-import { addToLibrary as addToLibraryApi } from '../../../api/library'; // renamed import
+import {
+  addToLibrary as addToLibraryApi,
+  checkBookInLibrary,
+  removeFromLibrary
+} from '../../../api/library';
+import { Loader2 } from "lucide-react"; // spinner icon
 
 const BookDetailsPage = () => {
   const { id } = useParams();
   const [book, setBook] = useState(null);
-  const [addedToLibrary, setAddedToLibrary] = useState(false); 
+  const [inLibrary, setInLibrary] = useState(false);
+  const [checkingLibrary, setCheckingLibrary] = useState(true);
+  const [updatingLibrary, setUpdatingLibrary] = useState(false);
   const { getToken, userId } = useAuth();
-
 
   const getBookDetails = async (id) => {
     try {
@@ -20,20 +26,45 @@ const BookDetailsPage = () => {
     }
   };
 
-  const addToLibraryHandler = async () => {
-    if (!userId) return; // not signed in
-  try {
-    const token = await getToken(); // short-lived Clerk token
-    const res = await addToLibraryApi({bookId: id, token});
-    if (res.status === 201) setAddedToLibrary(true);
-  } catch (error) {
-      console.error('Failed to add book to library:', error);
-    } 
+  const toggleLibraryHandler = async () => {
+    if (!userId) return;
+    setUpdatingLibrary(true);
+    try {
+      const token = await getToken();
+      if (inLibrary) {
+        const res = await removeFromLibrary({ bookId: id, token });
+        if (res.status === 204) setInLibrary(false);
+      } else {
+        const res = await addToLibraryApi({ bookId: id, token });
+        if (res.status === 201) setInLibrary(true);
+      }
+    } catch (error) {
+      console.error('Failed to update library:', error);
+    } finally {
+      setUpdatingLibrary(false);
+    }
+  };
+
+  const checkLibrary = async (id) => {
+    if (!userId) return;
+    try {
+      setCheckingLibrary(true);
+      const token = await getToken();
+      const res = await checkBookInLibrary({ bookId: id, token });
+      if (res.status === 200) setInLibrary(true);
+    } catch (error) {
+      console.error('Failed to check book in library:', error);
+    } finally {
+      setCheckingLibrary(false);
+    }
   };
 
   useEffect(() => {
-    getBookDetails(id);
-  }, [id]);
+    if (id) {
+      getBookDetails(id);
+      checkLibrary(id);
+    }
+  }, [id, userId, getToken]);
 
   if (!book) {
     return (
@@ -46,6 +77,7 @@ const BookDetailsPage = () => {
       </div>
     );
   }
+
   return (
     <div className="p-6 max-w-4xl mx-auto bg-white rounded-2xl shadow-md mt-5">
       <div className="mb-6">
@@ -66,16 +98,23 @@ const BookDetailsPage = () => {
 
         <div className="flex-1 flex flex-col justify-start">
           <div className="text-sm text-gray-500 mb-3">
-            <span className="block">Published: <span className="text-gray-700 font-medium">{book.publishedDate}</span></span>
+            <span className="block">
+              Published:{' '}
+              <span className="text-gray-700 font-medium">
+                {book.publishedDate}
+              </span>
+            </span>
             <span className="block mt-1">{book.pageCount} pages</span>
           </div>
 
           <div className="mb-4">
             <p className="font-semibold text-sm text-gray-800 mb-1">Genres</p>
             <p className="text-sm text-gray-700">
-              {book.categories
-                .map(cat => cat.split('/').map(s => s.trim()).join(', '))
-                .join(', ')}
+              {Array.isArray(book.categories) && book.categories.length > 0
+                ? book.categories
+                    .map((cat) => cat.split('/').map((s) => s.trim()).join(', '))
+                    .join(', ')
+                : 'N/A'}
             </p>
           </div>
         </div>
@@ -86,9 +125,30 @@ const BookDetailsPage = () => {
         className="mt-2 leading-relaxed text-gray-800 [&_ul]:list-disc [&_ul]:ml-6 [&_li]:mb-2"
         dangerouslySetInnerHTML={{ __html: book.description }}
       />
-    <SignedIn><button className='shadow-lg w-44 h-12 rounded-lg transition transform hover:scale-103 duration-700' onClick={addToLibraryHandler}>{addedToLibrary ? 'Added to Library' : 'Add to Library'}
-</button></SignedIn>
 
+      <SignedIn>
+        <button
+          className="shadow-lg w-52 h-12 rounded-lg transition transform hover:scale-103 duration-700 disabled:bg-gray-300 flex items-center justify-center gap-2"
+          onClick={toggleLibraryHandler}
+          disabled={checkingLibrary || updatingLibrary}
+        >
+          {checkingLibrary ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Checking...
+            </>
+          ) : updatingLibrary ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              {inLibrary ? 'Removing...' : 'Adding...'}
+            </>
+          ) : inLibrary ? (
+            'Remove from Library'
+          ) : (
+            'Add to Library'
+          )}
+        </button>
+      </SignedIn>
     </div>
   );
 };
