@@ -6,7 +6,7 @@ import Dashboard from './components/pages/Dashboard.jsx'
 import LandingPage from './components/pages/LandingPage.jsx'
 import ProtectedRoute from './auth/ProtectedRoute.jsx'
 import HeaderLayout from './components/layouts/HeaderLayout.jsx'
-
+import UserLibrary from './components/pages/library/UserLibrary.jsx'
 function App() {
   return (
     <Routes>
@@ -25,7 +25,8 @@ function App() {
             </ProtectedRoute>
           }
         />
-      </Route>
+        <Route path='/userLibrary' element ={<ProtectedRoute><UserLibrary/></ProtectedRoute>}/>
+        </Route>
     </Routes>
   )
 }

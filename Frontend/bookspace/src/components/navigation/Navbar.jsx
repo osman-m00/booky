@@ -9,6 +9,7 @@ const Navbar = () => {
         <NavLink to="/books" className="hover:underline">Books</NavLink>
         <NavLink to="/groups" className="hover:underline">Groups</NavLink>
         <NavLink to="/dashboard" className="hover:underline">Dashboard</NavLink>
+        <NavLink to="/userLibrary" className="hover:underline">Library</NavLink>
       </nav>
 
       {/* Clerk handles auth-aware rendering */}
