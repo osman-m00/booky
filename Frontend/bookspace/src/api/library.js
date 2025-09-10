@@ -31,3 +31,14 @@ export const removeFromLibrary = ({ bookId, token }) => {
     },
   });
 };
+
+export const ListLibrary = ({token}) => {
+  return api.get(
+    `/library/`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+};
