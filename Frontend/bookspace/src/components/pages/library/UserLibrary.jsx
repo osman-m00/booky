@@ -1,7 +1,7 @@
 import React, {useState, useEffect} from 'react'
 import { ListLibrary } from '../../../api/library'
 import { useAuth } from '@clerk/clerk-react'
-
+import LibraryCard from './LibraryCard'
 const UserLibrary = () => {
     const tabs = ['All Books', 'Currently Reading', 'Want to Read', 'Finished']
     const [activeTab, setActiveTab] = useState('All Books')
@@ -34,10 +34,16 @@ const UserLibrary = () => {
             (<button key={tab} onClick={()=>setActiveTab(tab)} className={`text-xl ${activeTab===tab ? "border-b-2 border-black font-semibold transition duration-900" : "text-gray-500"}`}> {tab} </button>)
             )}
         </div>
-        <div className='mt-10'>
-            {books.map(book=>(<div key={book.id}>
-                {book.book.title}
-            </div>))}
+        <div className='mt-10 grid grid-cols-4'>
+            {books.map(book=>(
+             <LibraryCard
+                key={book.id}
+                title={book.book.title}
+                author={book.book.author}
+                 imgUrl = {book.book.cover_image_url}
+
+             />
+             ))}
         </div>
     </div>
   )
