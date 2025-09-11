@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react'
+import React, {useState, useEffect, useRef} from 'react'
 import { ListLibrary } from '../../../api/library'
 import { useAuth } from '@clerk/clerk-react'
 import LibraryCard from './LibraryCard'
@@ -8,23 +8,29 @@ const UserLibrary = () => {
     const [books, setBooks] = useState([])
     const [loading, setLoading] = useState(true)
     const {userId, getToken} = useAuth()
-
+    const [filteredBooks, setFilteredBooks] = useState([]);
     const listlibrary = async () =>{
         if(!userId) return;
         try{
             const token = await getToken()
             const res = await ListLibrary({token})
 
-            if(res.status===200) {setLoading(false); setBooks(res.data.items)
+            if(res.status===200) { const normalizedBooks = res.data.items.map(book => ({ ...book, status: book.book.status || "All Books", }));
+            setBooks(normalizedBooks);
+             setLoading(false);
 }
         }
     catch (error) {
             console.log('Failed to fetch library items', error)
         }
     }
+   
     useEffect(()=>{
         listlibrary()
     }, [])
+      useEffect(()=>{
+        setFilteredBooks(activeTab==='All Books' ? books : books.filter(book=>book.book.status === activeTab))
+    }, [activeTab, books])
     console.log(books)
   return (
     <div className='p-10'>
@@ -35,7 +41,7 @@ const UserLibrary = () => {
             )}
         </div>
         <div className='mt-10 grid grid-cols-4'>
-            {books.map(book=>(
+            {filteredBooks.map(book=>(
              <LibraryCard
                 key={book.id}
                 title={book.book.title}
