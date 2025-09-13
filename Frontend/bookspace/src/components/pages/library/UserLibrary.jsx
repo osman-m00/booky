@@ -2,6 +2,7 @@ import React, {useState, useEffect, useRef} from 'react'
 import { ListLibrary } from '../../../api/library'
 import { useAuth } from '@clerk/clerk-react'
 import LibraryCard from './LibraryCard'
+import LibrarySkeletonCards from './LibrarySkeletonCards'
 const UserLibrary = () => {
     const tabs = ['All Books', 'Currently Reading', 'Want to Read', 'Finished']
     const [activeTab, setActiveTab] = useState('All Books')
@@ -32,6 +33,12 @@ const UserLibrary = () => {
         setFilteredBooks(activeTab==='All Books' ? books : books.filter(book=>book.book.status === activeTab))
     }, [activeTab, books])
     console.log(books)
+
+    const handleRemove = (id) =>{
+        setFilteredBooks((prevbooks)=>prevbooks.filter((book=>book.book.id!==id)))
+          setBooks(prevBooks => prevBooks.filter(book => book.book.id !== id));
+
+    }
   return (
     <div className='p-10'>
         <h1 className='text-4xl  font-bold mb-10'>My Library</h1>
@@ -41,15 +48,18 @@ const UserLibrary = () => {
             )}
         </div>
         <div className='mt-10 grid grid-cols-4'>
-            {filteredBooks.map(book=>(
+   
+            { loading? [1,2,3,4].map((n)=><LibrarySkeletonCards/>) : (filteredBooks.map(book=>(
              <LibraryCard
-                key={book.id}
+                key={book.book.id}
+                id={book.book.id}
                 title={book.book.title}
                 author={book.book.author}
                  imgUrl = {book.book.cover_image_url}
-
+                onRemove = {handleRemove}
              />
-             ))}
+             
+             )))}
         </div>
     </div>
   )
