@@ -7,7 +7,8 @@ import {
   checkBookInLibrary,
   removeFromLibrary
 } from '../../../api/library';
-import { Loader2 } from "lucide-react"; // spinner icon
+import { Loader2 } from "lucide-react"; 
+import AddToLibraryForm from './AddToLibraryForm';
 
 const BookDetailsPage = () => {
   const { id } = useParams();
@@ -15,6 +16,7 @@ const BookDetailsPage = () => {
   const [inLibrary, setInLibrary] = useState(false);
   const [checkingLibrary, setCheckingLibrary] = useState(true);
   const [updatingLibrary, setUpdatingLibrary] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const { getToken, userId } = useAuth();
 
   const getBookDetails = async (id) => {
@@ -35,8 +37,7 @@ const BookDetailsPage = () => {
         const res = await removeFromLibrary({ bookId: id, token });
         if (res.status === 204) setInLibrary(false);
       } else {
-        const res = await addToLibraryApi({ bookId: id, token });
-        if (res.status === 201) setInLibrary(true);
+        setShowModal(true);
       }
     } catch (error) {
       console.error('Failed to update library:', error);
@@ -149,7 +150,19 @@ const BookDetailsPage = () => {
           )}
         </button>
       </SignedIn>
+      {showModal && 
+      <div className="fixed top-0 left-0 w-full h-full bg-[rgba(0,0,0,0.5)] flex justify-center items-center" onClick={()=>setShowModal(false)}>
+      <div onClick={(e)=>e.stopPropagation()}   className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full"> 
+      <AddToLibraryForm bookId = {id} 
+        getToken = {getToken}
+        onClose = {()=>setShowModal(false)}
+        onSuccess = {()=> {setInLibrary(true); setShowModal(false);}}
+      /> 
+      </div>
+      </div>
+      }
     </div>
+
   );
 };
 
