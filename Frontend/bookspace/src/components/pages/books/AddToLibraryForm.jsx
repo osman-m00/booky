@@ -10,17 +10,21 @@ const AddToLibraryForm = ({ bookId, getToken, onClose, onSuccess }) => {
     setLoading(true);
 
     const formValues = {
-      status: e.target.status.value.trim(),
-      rating: rating,
-      notes: e.target.notes.value.trim(),
+        status: e.target.status.value.trim(),      // already string
+        rating: Number(rating),                    // convert to number
+         notes: e.target.notes.value.trim().slice(0, 2000)
     };
 
     try {
       const token = await getToken();
-      const res = await addToLibrary({ bookId, formValues, token });
+      const res = await addToLibrary({ bookId: String(bookId), ...formValues, token });
       if (res.status === 201) onSuccess(); // close modal and update parent
     } catch (error) {
-      console.log('Failed to add to library:', error);
+      console.error('Failed to add to library:', error);
+      console.error('Status:', error.response?.status);
+      console.error('Body:', error.response?.data);
+    } finally {
+        setLoading(false)
     }
   };
 
@@ -32,12 +36,13 @@ const AddToLibraryForm = ({ bookId, getToken, onClose, onSuccess }) => {
           <label className="mb-1 font-medium text-gray-700">Status</label>
           <select
             name="status"
-            defaultValue="Want to Read"
+            defaultValue="want_to_read"
             className="border rounded p-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400"
           >
-            <option>Currently Reading</option>
-            <option>Want to Read</option>
-            <option>Finished</option>
+          <option value="currently_reading">Currently Reading</option>
+          <option value="want_to_read">Want to Read</option>
+          <option value="completed">Completed</option>
+          <option value="abandoned">Abandoned</option>
           </select>
         </div>
 
@@ -50,7 +55,7 @@ const AddToLibraryForm = ({ bookId, getToken, onClose, onSuccess }) => {
             min={1}
             max={5}
             value={rating}
-            onChange={(e) => setRating(e.target.value)}
+            onChange={(e) => setRating(Number(e.target.value))}
             className="flex-1"
           />
           <span className="w-6 text-center">{rating}</span>
