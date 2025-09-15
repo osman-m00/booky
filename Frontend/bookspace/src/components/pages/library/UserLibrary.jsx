@@ -51,12 +51,9 @@ const UserLibrary = () => {
    
             { loading? [1,2,3,4].map((n)=><LibrarySkeletonCards/>) : (filteredBooks.map(book=>(
              <LibraryCard
-                key={book.book.id}
-                id={book.book.id}
-                title={book.book.title}
-                author={book.book.author}
-                 imgUrl = {book.book.cover_image_url}
-                onRemove = {handleRemove}
+                 key={book.book.id}
+                 book={book} // 👈 pass the full item
+                onRemove={handleRemove}
              />
              
              )))}
