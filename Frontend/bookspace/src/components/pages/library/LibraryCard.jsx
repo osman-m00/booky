@@ -3,7 +3,7 @@ import { useAuth } from '@clerk/clerk-react'
 import { Loader2 } from "lucide-react"; // spinner icon
 import LibraryDetailsCard from './LibraryDetailsCard';
 
-const LibraryCard = ({book, onRemove }) => {
+const LibraryCard = ({book, onRemove, onUpdate }) => {
   const {userId, getToken} = useAuth();
   const [detailsToggle, setdetailsToggle] = useState(false)
 
@@ -39,7 +39,7 @@ const LibraryCard = ({book, onRemove }) => {
       {detailsToggle && 
       <div className='fixed top-0 left-0 w-full h-full bg-[rgba(0,0,0,0.5)] flex justify-center items-center' onClick={()=>setdetailsToggle(false)}>
       <div onClick={(e)=>e.stopPropagation()} className='bg-white p-6 rounded-lg shadow-lg max-w-md w-full'>
-      <LibraryDetailsCard book={book} getToken = {getToken} userId = {userId} onRemove={onRemove}/>
+      <LibraryDetailsCard book={book} getToken = {getToken} userId = {userId} onRemove={onRemove} onUpdate = {onUpdate} />
       </div>
       </div>
       }

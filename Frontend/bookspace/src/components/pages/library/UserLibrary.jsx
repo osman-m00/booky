@@ -1,65 +1,116 @@
-import React, {useState, useEffect, useRef} from 'react'
-import { ListLibrary } from '../../../api/library'
-import { useAuth } from '@clerk/clerk-react'
-import LibraryCard from './LibraryCard'
-import LibrarySkeletonCards from './LibrarySkeletonCards'
+import React, { useState, useEffect } from "react";
+import { ListLibrary } from "../../../api/library";
+import { useAuth } from "@clerk/clerk-react";
+import LibraryCard from "./LibraryCard";
+import LibrarySkeletonCards from "./LibrarySkeletonCards";
+
 const UserLibrary = () => {
-    const tabs = ['All Books', 'Currently Reading', 'Want to Read', 'Finished']
-    const [activeTab, setActiveTab] = useState('All Books')
-    const [books, setBooks] = useState([])
-    const [loading, setLoading] = useState(true)
-    const {userId, getToken} = useAuth()
-    const [filteredBooks, setFilteredBooks] = useState([]);
-    const listlibrary = async () =>{
-        if(!userId) return;
-        try{
-            const token = await getToken()
-            const res = await ListLibrary({token})
+  // Display tabs (human-readable)
+  const tabs = [
+    "All Books",
+    "Currently Reading",
+    "Want to Read",
+    "Completed",
+    "Abandoned",
+  ];
 
-            if(res.status===200) { const normalizedBooks = res.data.items.map(book => ({ ...book, status: book.book.status || "All Books", }));
-            setBooks(normalizedBooks);
-             setLoading(false);
-}
-        }
-    catch (error) {
-            console.log('Failed to fetch library items', error)
-        }
+  // Map tab labels -> backend status keys
+  const tabMap = {
+    "All Books": null,
+    "Currently Reading": "currently_reading",
+    "Want to Read": "want_to_read",
+    "Completed": "completed",
+    "Abandoned": "abandoned",
+  };
+
+  const [activeTab, setActiveTab] = useState("All Books");
+  const [books, setBooks] = useState([]);
+  const [filteredBooks, setFilteredBooks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const { userId, getToken } = useAuth();
+
+  // Fetch library
+  const listlibrary = async () => {
+    if (!userId) return;
+    try {
+      const token = await getToken();
+      const res = await ListLibrary({ token });
+
+      if (res.status === 200) {
+        // ✅ backend already gives { status, rating, notes, book }
+        setBooks(res.data.items);
+        setLoading(false);
+      }
+    } catch (error) {
+      console.log("Failed to fetch library items", error);
     }
-   
-    useEffect(()=>{
-        listlibrary()
-    }, [])
-      useEffect(()=>{
-        setFilteredBooks(activeTab==='All Books' ? books : books.filter(book=>book.book.status === activeTab))
-    }, [activeTab, books])
-    console.log(books)
+  };
 
-    const handleRemove = (id) =>{
-        setFilteredBooks((prevbooks)=>prevbooks.filter((book=>book.book.id!==id)))
-          setBooks(prevBooks => prevBooks.filter(book => book.book.id !== id));
+  useEffect(() => {
+    listlibrary();
+  }, []);
 
-    }
+  // Filter when tab changes
+  useEffect(() => {
+    const statusKey = tabMap[activeTab];
+    setFilteredBooks(
+      !statusKey ? books : books.filter((item) => item.status === statusKey)
+    );
+  }, [activeTab, books]);
+
+  // Remove
+  const handleRemove = (id) => {
+    setBooks((prev) => prev.filter((item) => item.book.id !== id));
+    setFilteredBooks((prev) => prev.filter((item) => item.book.id !== id));
+  };
+
+  // Update
+  const handleUpdate = (id, updatedItem) => {
+    setBooks((prev) =>
+      prev.map((item) => (item.book.id === id ? { ...item, ...updatedItem } : item))
+    );
+
+    setFilteredBooks((prev) =>
+      prev.map((item) => (item.book.id === id ? { ...item, ...updatedItem } : item))
+    );
+  };
+
   return (
-    <div className='p-10'>
-        <h1 className='text-4xl  font-bold mb-10'>My Library</h1>
-        <div className='flex flex-row justify-center gap-7'>
-            {tabs.map((tab)=>
-            (<button key={tab} onClick={()=>setActiveTab(tab)} className={`text-xl ${activeTab===tab ? "border-b-2 border-black font-semibold transition duration-900" : "text-gray-500"}`}> {tab} </button>)
-            )}
-        </div>
-        <div className='mt-10 grid grid-cols-4'>
-   
-            { loading? [1,2,3,4].map((n)=><LibrarySkeletonCards/>) : (filteredBooks.map(book=>(
-             <LibraryCard
-                 key={book.book.id}
-                 book={book} // 👈 pass the full item
-                onRemove={handleRemove}
-             />
-             
-             )))}
-        </div>
-    </div>
-  )
-}
+    <div className="p-10">
+      <h1 className="text-4xl font-bold mb-10">My Library</h1>
 
-export default UserLibrary
+      {/* Tabs */}
+      <div className="flex flex-row justify-center gap-7">
+        {tabs.map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`text-xl ${
+              activeTab === tab
+                ? "border-b-2 border-black font-semibold transition duration-300"
+                : "text-gray-500"
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      {/* Books */}
+      <div className="mt-10 grid grid-cols-4 gap-6">
+        {loading
+          ? [1, 2, 3, 4].map((n) => <LibrarySkeletonCards key={n} />)
+          : filteredBooks.map((book) => (
+              <LibraryCard
+                key={book.book.id}
+                book={book} // 👈 full item with {book, status, rating, notes}
+                onRemove={handleRemove}
+                onUpdate={handleUpdate}
+              />
+            ))}
+      </div>
+    </div>
+  );
+};
+
+export default UserLibrary;

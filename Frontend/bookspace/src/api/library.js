@@ -42,3 +42,16 @@ export const ListLibrary = ({token}) => {
     }
   );
 };
+
+
+export const updateLibraryItem = ({ bookId, status = null, rating = null, notes = null, token }) => {
+  return api.put(
+    `/library/${bookId}`,
+    {status, rating, notes },
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+};

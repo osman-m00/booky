@@ -77,13 +77,7 @@ const listLibrary = async (req, res) => {
 
 const updateLibraryItem = async (req, res) => {
   try {
-    const clerkUser = {
-      id: req.user.id,
-      email: req.user.claims.email,
-      firstName: req.user.claims.first_name,
-      lastName: req.user.claims.last_name,
-      avatarUrl: req.user.claims.avatar_url,
-    };
+    const clerkUser = req.user;
     const internalUser = await getOrCreateUser(clerkUser);
     const userId = internalUser.id;
 
