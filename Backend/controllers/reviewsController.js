@@ -6,13 +6,7 @@ const { realTimeService } = require('../services/realtimeService');
 
 async function createReview(req, res) {
   try {
-    const clerkUser = {
-      id: req.user.id,
-      email: req.user.claims.email,
-      firstName: req.user.claims.first_name,
-      lastName: req.user.claims.last_name,
-      avatarUrl: req.user.claims.avatar_url,
-    };
+    const clerkUser = req.user;
     const internalUser = await getOrCreateUser(clerkUser);
     const userId = internalUser.id;
 
@@ -69,13 +63,7 @@ async function getReview(req, res) {
 
 async function deleteReview(req, res) {
   try {
-    const clerkUser = {
-      id: req.user.id,
-      email: req.user.claims.email,
-      firstName: req.user.claims.first_name,
-      lastName: req.user.claims.last_name,
-      avatarUrl: req.user.claims.avatar_url,
-    };
+    const clerkUser = req.user;
     const internalUser = await getOrCreateUser(clerkUser);
     const userId = internalUser.id;
 
@@ -104,13 +92,7 @@ async function deleteReview(req, res) {
 
 async function updateReview(req, res) {
   try {
-    const clerkUser = {
-      id: req.user.id,
-      email: req.user.claims.email,
-      firstName: req.user.claims.first_name,
-      lastName: req.user.claims.last_name,
-      avatarUrl: req.user.claims.avatar_url,
-    };
+    const clerkUser = req.user;
     const internalUser = await getOrCreateUser(clerkUser);
     const userId = internalUser.id;
 
@@ -149,11 +131,11 @@ async function updateReview(req, res) {
 
 async function listReviews(req, res) {
   try {
-    const { bookId } = req.query;
+    const bookId = req.params.bookId || req.query.bookId;
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 10;
 
-    if (!bookId || !isUuid(bookId)) return res.status(400).json({ error: 'invalid_book_id', message: 'bookId must be UUID' });
+    if (!bookId || typeof bookId !== 'string' || bookId.trim() === '') return res.status(400).json({ error: 'invalid_book_id', message: 'bookId must be UUID' });
 
     const { reviews, total } = await reviewsService.listReviews(bookId, page, limit);
 
@@ -173,15 +155,9 @@ async function listReviews(req, res) {
 
 async function searchReviews(req, res) {
   try {
-    const clerkUser = {
-      id: req.user.id,
-      email: req.user.claims.email,
-      firstName: req.user.claims.first_name,
-      lastName: req.user.claims.last_name,
-      avatarUrl: req.user.claims.avatar_url,
-    };
-    const internalUser = await getOrCreateUser(clerkUser);
-    const userId = internalUser.id;
+     const clerkUser = req.user;
+     const internalUser = await getOrCreateUser(clerkUser);
+     const userId = internalUser.id;
 
     const { bookId, rating, page = 1, limit = 10 } = req.query;
 

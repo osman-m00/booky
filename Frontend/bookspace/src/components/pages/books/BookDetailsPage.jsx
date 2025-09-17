@@ -9,6 +9,7 @@ import {
 } from '../../../api/library';
 import { Loader2 } from "lucide-react"; 
 import AddToLibraryForm from './AddToLibraryForm';
+import ReviewsSection from '../reviews/reviewsSection';
 
 const BookDetailsPage = () => {
   const { id } = useParams();
@@ -161,8 +162,11 @@ const BookDetailsPage = () => {
       </div>
       </div>
       }
-    </div>
+     
 
+     <ReviewsSection bookId = {id}/>
+
+    </div>
   );
 };
 

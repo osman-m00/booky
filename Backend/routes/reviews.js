@@ -10,7 +10,7 @@ router.post('/',createReview);
 router.get('/:id', getReview);
 router.put('/:id', updateReview);
 router.delete('/:id', deleteReview);
-router.get('/book/:bookId', listReviews);
+router.get('/books/book/:bookId', listReviews);
 router.get('/search', searchReviews);
 
 module.exports = router;
